@@ -100,3 +100,78 @@ canvas {
     overflow-x: hidden;
   }
 }
+/* Mobile viewport and overflow correction */
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body,
+#root,
+.app-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media screen and (max-width: 800px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .app-shell,
+  .layout,
+  .main-content,
+  .page-section,
+  .welcome-row,
+  .lower-grid,
+  .trade-layout,
+  .page-title-row,
+  .section-heading,
+  .panel,
+  .balance-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .welcome-row,
+  .lower-grid,
+  .trade-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .market-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  button {
+    max-width: 100%;
+  }
+
+  .panel,
+  .market-card,
+  .balance-card {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media screen and (max-width: 390px) {
+  .market-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .main-content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
