@@ -401,70 +401,95 @@ const setTradeEnabled = async (value) => {
     }
     connectCrypto()
 
-    const apiKey = import.meta.env.VITE_TWELVEDATA_API_KEY
-    let otherSocket
-    if (apiKey) {
-      otherSocket = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${encodeURIComponent(apiKey)}`)
-      otherSocket.onopen = () => {
-        setMarketConnection(v => ({ ...v, other: 'live connection' }))
-        otherSocket.send(JSON.stringify({ action: 'subscribe', params: { symbols: 'AAPL,NVDA,TSLA,XAU/USD,GBP/USD,EUR/USD,USD/JPY,SPX,NDX,DAX,DJI' } }))
-      }
-      otherSocket.onmessage = (event) => {
-        try {
-          const d = JSON.parse(event.data)
-          if (d.status === 'error' || d.event === 'error' || (d.event === 'subscribe-status' && d.status === 'error')) {
-            const providerMessage = String(d.message || d.code || 'Twelve Data rejected the subscription')
-            setMarketConnection(v => ({ ...v, other: `provider error: ${providerMessage}` }))
-            return
-          }
-          const raw = String(d.symbol || d.event || '').toUpperCase().replaceAll('/', '').replaceAll(' ', '')
-          const symbol = raw.includes('XAU') ? 'XAU' : raw.includes('AAPL') ? 'AAPL' : raw.includes('NVDA') ? 'NVDA' : raw.includes('TSLA') ? 'TSLA' : raw.includes('GBPUSD') ? 'GBPUSD' : raw.includes('EURUSD') ? 'EURUSD' : raw.includes('USDJPY') ? 'USDJPY' : raw.includes('SPX') ? 'SPX' : raw.includes('NDX') ? 'NDX' : raw.includes('DAX') ? 'DAX' : raw.includes('DJI') ? 'DJI' : null
-          const price = Number(d.price)
-          if (symbol && Number.isFinite(price) && price > 0) {
-            const now = Date.now()
-            setLivePrices(prev => {
-              const old = prev[symbol] || {}
-              const base = old.sessionStartPrice || price
-              const change = base ? ((price - base) / base) * 100 : null
-              return { ...prev, [symbol]: { ...old, price, change, sessionStartPrice: base, updatedAt: now, source: 'Twelve Data live' } }
-            })
-            // Build a candle from actual incoming provider ticks (not fabricated sample data).
-            setLiveCandles(prev => {
-              const next = [...(prev[symbol] || [])]
-              const bucket = Math.floor(now / 60000) * 60000
-              const last = next[next.length - 1]
-              if (last?.time === bucket) {
-                last.close = price; last.high = Math.max(last.high, price); last.low = Math.min(last.low, price); last.up = last.close >= last.open
-              } else next.push({ time: bucket, open: price, high: price, low: price, close: price, up: true })
-              return { ...prev, [symbol]: next.slice(-60) }
-            })
-            setMarketConnection(v => ({ ...v, other: 'live' }))
-          }
-        } catch { /* ignore provider status messages */ }
-      }
-      otherSocket.onerror = () => setMarketConnection(v => ({ ...v, other: 'disconnected' }))
-      otherSocket.onclose = () => setMarketConnection(v => ({ ...v, other: 'disconnected' }))
+        const providerSymbols = {
+      XAU: 'XAU/USD',
+      AAPL: 'AAPL',
+      NVDA: 'NVDA',
+      TSLA: 'TSLA',
+      GBPUSD: 'GBP/USD',
+      EURUSD: 'EUR/USD',
+      USDJPY: 'USD/JPY',
+      SPX: 'SPX',
+      NDX: 'NDX',
+      DAX: 'DAX',
+      DJI: 'DJI'
     }
-    return () => { closed = true; clearTimeout(retryTimer); cryptoSocket?.close(); otherSocket?.close() }
-  }, [])
+
+    let pricePollTimer
+    let pricePollStopped = false
+
+    const updateOtherPrices = async () => {
+      if (closed || pricePollStopped) return
+
+      const symbols = Object.entries(providerSymbols)
+
+      await Promise.allSettled(
+        symbols.map(async ([symbol, providerSymbol]) => {
+          const url = new URL('/api/market', window.location.origin)
+          url.searchParams.set('symbol', providerSymbol)
+
+          const response = await fetch(url.toString())
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+          const data = await response.json()
+          const price = Number(data.price)
+
+          if (!Number.isFinite(price) || price <= 0) {
+            throw new Error('Invalid market price')
+          }
+
+          const now = Date.now()
+
+          setLivePrices(prev => {
+            const old = prev[symbol] || {}
+            const base = old.sessionStartPrice || old.price || price
+            const change = base ? ((price - base) / base) * 100 : null
+
+            return {
+              ...prev,
+              [symbol]: {
+                ...old,
+                price,
+                change,
+                sessionStartPrice: base,
+                updatedAt: now,
+                source: 'Twelve Data API'
+              }
+            }
+          })
+        })
+      )
+
+      if (!closed && !pricePollStopped) {
+        setMarketConnection(v => ({ ...v, other: 'polling API' }))
+        pricePollTimer = setTimeout(updateOtherPrices, 15000)
+      }
+    }
+
+    updateOtherPrices()
+
+return () => {
+  closed = true
+  pricePollStopped = true
+  clearTimeout(retryTimer)
+  clearTimeout(pricePollTimer)
+  cryptoSocket?.close()
+}
+}, [])
 
   // Load actual historical 1-minute candles for the selected non-crypto market.
   // WebSocket ticks update candles afterward; no sample candles/prices are generated.
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_TWELVEDATA_API_KEY
     const market = marketDefinitions.find(m => m.symbol === selected)
-    if (!market || market.kind === 'Crypto' || !apiKey) return
+    if (!market || market.kind === 'Crypto') return
     const providerSymbols = { XAU: 'XAU/USD', AAPL: 'AAPL', NVDA: 'NVDA', TSLA: 'TSLA', GBPUSD: 'GBP/USD', EURUSD: 'EUR/USD', USDJPY: 'USD/JPY', SPX: 'SPX', NDX: 'NDX', DAX: 'DAX', DJI: 'DJI' }
     const providerSymbol = providerSymbols[market.symbol]
     if (!providerSymbol) return
     const controller = new AbortController()
     setMarketConnection(v => ({ ...v, other: 'loading candles' }))
-    const url = new URL('https://api.twelvedata.com/time_series')
+    const url = new URL('/api/market', window.location.origin)
     url.searchParams.set('symbol', providerSymbol)
-    url.searchParams.set('interval', '1min')
-    url.searchParams.set('outputsize', '60')
-    url.searchParams.set('order', 'ASC')
-    url.searchParams.set('apikey', apiKey)
+    url.searchParams.set('type', 'candles')
     fetch(url.toString(), { signal: controller.signal })
       .then(async response => { if (!response.ok) throw new Error(`Candle API HTTP ${response.status}`); return response.json() })
       .then(data => {

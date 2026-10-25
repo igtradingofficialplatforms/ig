@@ -12,3 +12,91 @@
 
 /* Language and international phone fields */
 .language-picker-label{display:flex;align-items:center;gap:6px;color:var(--muted,#aaa)}.language-picker{max-width:145px;min-width:96px;background:#151515;color:inherit;border:1px solid #444;border-radius:8px;padding:9px 7px}.phone-entry-row{display:grid;grid-template-columns:minmax(145px, .9fr) minmax(150px,1.1fr);gap:8px}.country-code-select{min-width:0}.phone-number-input{min-width:0}@media(max-width:600px){.phone-entry-row{grid-template-columns:1fr}.language-picker{max-width:115px}.topbar-right{gap:6px}}
+
+/* Mobile login/register modal fix */
+@media (max-width: 800px) {
+  .modal-backdrop {
+    overflow-y: auto;
+    place-items: start center;
+    padding: 16px 12px;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 420px;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    margin: auto 0;
+    padding: 24px 18px;
+  }
+}
+
+/* Mobile register and login form sizing */
+@media (max-width: 800px) {
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    overflow-y: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 420px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    margin: auto 0;
+    padding: 20px 16px;
+  }
+
+  .modal h2 {
+    font-size: 20px;
+    margin-top: 16px;
+  }
+
+  .modal .text-button {
+    margin-top: 10px;
+    margin-bottom: 8px;
+  }
+}
+
+/* Fit the website to mobile screen width */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+@media (max-width: 800px) {
+  .app-shell,
+  .layout,
+  .main-content,
+  .page-section {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}
