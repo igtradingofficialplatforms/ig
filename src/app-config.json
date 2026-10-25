@@ -1,0 +1,36 @@
+{
+  "appName": "IGtrade",
+  "mode": "virtual",
+  "durations": {
+    "30": {
+      "ratePercent": 20,
+      "minAmount": 20,
+      "maxAmount": 10000
+    },
+    "60": {
+      "ratePercent": 40,
+      "minAmount": 12000,
+      "maxAmount": 30000
+    },
+    "120": {
+      "ratePercent": 80,
+      "minAmount": 35000,
+      "maxAmount": 99000
+    }
+  },
+  "assets": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "XAU",
+    "AAPL",
+    "NVDA",
+    "TSLA"
+  ],
+  "walletNetworks": [
+    "TRC20",
+    "BTC",
+    "ETH"
+  ],
+  "note": "Rates are fixed fixed scenarios, not live-market returns."
+}

@@ -1,0 +1,22 @@
+{
+  "name": "igtrade",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.0",
+    "typescript": "^5.9.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "@supabase/supabase-js": "^2.57.0"
+  },
+  "devDependencies": {}
+}

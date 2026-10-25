@@ -1,0 +1,6 @@
+{
+  "appId": "com.igtrade.app",
+  "appName": "IGtrade",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
