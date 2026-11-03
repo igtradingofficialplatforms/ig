@@ -226,3 +226,81 @@ body,
     white-space: nowrap;
   }
 }
+
+/* Floating animated Customer Service */
+.customer-service-float {
+  position: fixed;
+  right: 22px;
+  bottom: 28px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 15px 9px 9px;
+  border: 1px solid #806a3d;
+  border-radius: 999px;
+  background: rgba(20, 19, 17, .97);
+  color: #f4d58e;
+  text-decoration: none;
+  box-shadow: 0 8px 28px #0009;
+  isolation: isolate;
+}
+
+.customer-service-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #31a9e8, #1676bd);
+}
+
+.customer-service-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: white;
+}
+
+.customer-service-label {
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.customer-service-pulse {
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #39a9e9;
+  border-radius: 50%;
+  animation: customerServicePulse 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes customerServicePulse {
+  0% {
+    transform: scale(1);
+    opacity: .8;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 800px) {
+  .customer-service-float {
+    right: 13px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customer-service-pulse {
+    animation: none;
+  }
+}

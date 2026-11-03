@@ -124,6 +124,7 @@ function App() {
   const [trade, setTrade] = useState(null)
   const [remaining, setRemaining] = useState(0)
   const [balance, setBalance] = useState(0)
+  const [tradeStarting, setTradeStarting] = useState(false)
   const [tradeHistory, setTradeHistory] = useState([])
   const [depositMethod, setDepositMethod] = useState('TRC20')
   const [depositAmount, setDepositAmount] = useState('50')
@@ -321,6 +322,168 @@ const setTradeEnabled = async (value) => {
     })
     return () => authListener.subscription.unsubscribe()
   }, [])
+  // Load every member's latest balance for the admin panel.
+  useEffect(() => {
+    if (!supabase || !isAdmin || !authSession?.user?.id) {
+      setMembers([]);
+      return;
+    }
+
+    let active = true;
+
+    const loadMembers = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, display_name, virtual_balance')
+        .order('created_at', { ascending: true });
+
+      if (!active) return;
+
+      if (error) {
+        console.error('Admin member balance loading failed:', error.message);
+        return;
+      }
+
+      setMembers((data || []).map(member => ({
+        id: member.id,
+        email: member.email || '',
+        name: member.display_name || '',
+        balance: Number(member.virtual_balance || 0)
+      })));
+    };
+
+    loadMembers();
+
+    const channel = supabase
+      .channel('admin-members-balance-live')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles'
+        },
+        () => {
+          if (active) loadMembers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin, authSession?.user?.id]);
+useEffect(() => {
+  const userId = authSession?.user?.id;
+
+  if (!supabase || !userId) {
+    setTradeHistory([]);
+    return;
+  }
+
+  let active = true;
+
+  const refreshAccount = async () => {
+    const [
+      { data: profile, error: profileError },
+      { data: rows, error: tradeError }
+    ] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('virtual_balance')
+        .eq('id', userId)
+        .maybeSingle(),
+
+      supabase
+        .from('trades')
+        .select('*')
+        .eq('user_id', userId)
+        .order('opened_at', { ascending: false })
+        .limit(100)
+    ]);
+
+    if (!active) return;
+
+    if (profileError) {
+      console.error('Balance load error:', profileError.message);
+    } else if (profile) {
+      setBalance(Number(profile.virtual_balance));
+    }
+
+    if (tradeError) {
+      console.error('Trade history error:', tradeError.message);
+      return;
+    }
+
+    setTradeHistory((rows || []).map(row => ({
+      id: row.id,
+      symbol: row.market,
+      assetName: row.market,
+      direction: row.trade_type,
+      amount: Number(row.amount),
+      duration: Number(row.duration_seconds),
+      virtualRate: Number(row.profit_percentage) / 100,
+      openPrice: Number(row.entry_price),
+      price: Number(row.entry_price),
+      targetPrice: row.target_price == null
+        ? null : Number(row.target_price),
+      endPrice: row.close_price == null
+        ? null : Number(row.close_price),
+      profit: Number(row.result || 0),
+      done: ['won', 'lost', 'cancelled'].includes(row.status),
+      startedAt: row.opened_at,
+      openTime: row.opened_at,
+      closeTime: row.closed_at,
+      resultAt: row.closed_at
+        ? new Date(row.closed_at).toLocaleTimeString()
+        : '',
+      endCandles: row.snapshot?.candles || [],
+      startCandles: []
+    })));
+  };
+
+  refreshAccount();
+
+  const channel = supabase
+    .channel(`igtrade-account-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${userId}`
+      },
+      payload => {
+        if (
+          active &&
+          payload.new &&
+          Number.isFinite(Number(payload.new.virtual_balance))
+        ) {
+          setBalance(Number(payload.new.virtual_balance));
+        }
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'trades',
+        filter: `user_id=eq.${userId}`
+      },
+      () => {
+        if (active) refreshAccount();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    active = false;
+    supabase.removeChannel(channel);
+  };
+}, [authSession?.user?.id]);
 
   const handleAuthSubmit = async (event) => {
     event.preventDefault()
@@ -624,34 +787,45 @@ const adjustMemberBalance = async (action = memberAction) => {
 
   const settledTradeIds = useRef(new Set());
 
-  const finishTrade = () => {
-    if (!trade || trade.done || !trade.awaitingDone) return;
+  
+const finishTrade = async () => {
+  if (!trade || trade.done || !trade.awaitingDone) return;
 
-    const tradeId = trade.id;
+  const tradeId = trade.id;
 
-    // Prevent duplicate completion in this open app session.
-    if (settledTradeIds.current.has(tradeId)) return;
-    settledTradeIds.current.add(tradeId);
+  if (settledTradeIds.current.has(tradeId)) return;
+  settledTradeIds.current.add(tradeId);
 
-    const closingPrice =
-      livePrices[trade.symbol]?.price ??
-      trade.endPrice ??
-      trade.openPrice;
+  if (!supabase || !authSession?.user?.id) {
+    settledTradeIds.current.delete(tradeId);
+    return setToast('Please sign in to save this trade.');
+  }
 
-    const stake = Number(trade.amount);
-    const rate = Number(trade.virtualRate);
-    const profit = Number((stake * rate).toFixed(2));
+  const closingPrice =
+    livePrices[trade.symbol]?.price ??
+    trade.endPrice ??
+    trade.openPrice;
 
-    if (
-      !Number.isFinite(stake) ||
-      stake <= 0 ||
-      !Number.isFinite(rate) ||
-      rate < 0 ||
-      !Number.isFinite(profit)
-    ) {
-      settledTradeIds.current.delete(tradeId);
-      setToast('Invalid trade amount or profit rate.');
-      return;
+  try {
+    const { data, error } = await supabase.rpc(
+      'igtrade_settle_virtual_trade',
+      {
+        p_trade_id: tradeId,
+        p_close_price: Number(closingPrice),
+        p_target_price: Number(trade.targetPrice),
+        p_snapshot: {
+          candles: liveCandles[trade.symbol] || trade.endCandles || []
+        }
+      }
+    );
+
+    if (error) throw error;
+
+    const profit = Number(data?.profit);
+    const nextBalance = Number(data?.balance);
+
+    if (!Number.isFinite(profit) || !Number.isFinite(nextBalance)) {
+      throw new Error('Invalid Supabase settlement response.');
     }
 
     const result = {
@@ -662,23 +836,30 @@ const adjustMemberBalance = async (action = memberAction) => {
       closeTime: new Date().toLocaleString(),
       profit,
       resultAt: new Date().toLocaleTimeString(),
-      endCandles: [
-        ...(liveCandles[trade.symbol] || trade.endCandles || [])
-      ]
+      endCandles: [...(
+        liveCandles[trade.symbol] || trade.endCandles || []
+      )]
     };
 
-    // Return the original stake and add simulated profit.
-    setBalance(current =>
-      Number((current + stake + profit).toFixed(2))
-    );
-
+    setBalance(nextBalance);
     setTrade(result);
-    setTradeHistory(history => [result, ...history]);
+
+    setTradeHistory(history => [
+      result,
+      ...history.filter(item => item.id !== result.id)
+    ]);
 
     setToast(
-      `Trade completed.Sprofit: ${money(profit)}.`
+      `Trade completed. Profit: ${money(profit)}. Supabase balance saved.`
     );
-  };
+
+  } catch (error) {
+    settledTradeIds.current.delete(tradeId);
+    console.error('Trade settlement failed:', error);
+    setToast(`Could not save trade: ${error.message}`);
+  }
+};
+
 
   useEffect(() => {
     if (!toast) return
@@ -686,21 +867,110 @@ const adjustMemberBalance = async (action = memberAction) => {
     return () => clearTimeout(t)
   }, [toast])
 
-  const startTrade = () => {
-    const n = Number(amount)
-    const limits = duration === 30 ? [20, 10000] : duration === 60 ? [12000, 30000] : [35000, 99000]
-    if (n < limits[0] || n > limits[1]) return setToast(`For ${duration}s trades, amount must be ${money(limits[0])}–${money(limits[1])}.`)
-    if (!tradeEnabled) { const lossRate = duration === 30 ? 0.20 : duration === 60 ? 0.40 : 0.80; return setToast(`Market voilatile-${Math.round(lossRate * 100)}% (-${money(n * lossRate)}). Becarefull`) }
-    if (n > balance) return setToast('Not enough available balance')
-    if (trade && !trade.done) return setToast('Finish the current trade first.')
-    if (asset.price == null) return setToast('Live price is not connected for this asset. Trade cannot start.');
-    const rate = duration === 30 ? 0.20 : duration === 60 ? 0.40 : 0.80
-    const targetPrice = Number((asset.price * (direction === 'BUY' ? 1 + rate / 100 : 1 - rate / 100)).toFixed(asset.price < 10 ? 5 : 2))
-    setBalance(v => Number((v - n).toFixed(2)))
-    setTrade({ id: Date.now(), symbol: asset.symbol, assetName: asset.name, price: asset.price, openPrice: asset.price, targetPrice, endPrice: null, amount: n, duration, direction, virtualRate: rate, startedAt: new Date().toLocaleString(), openTime: new Date().toLocaleString(), done: false, awaitingDone: false, startCandles: [...(liveCandles[asset.symbol] || [])] })
-    setRemaining(duration)
-    setToast('Trade started')
+  
+const startTrade = async () => {
+  const n = Number(amount);
+
+  const limits = duration === 30
+    ? [20, 10000]
+    : duration === 60
+      ? [12000, 30000]
+      : [35000, 99000];
+
+  if (n < limits[0] || n > limits[1]) {
+    return setToast(
+      `For ${duration}s trades, amount must be ${money(limits[0])}–${money(limits[1])}.`
+    );
   }
+
+  if (!tradeEnabled) {
+    return setToast('Trading is currently disabled.');
+  }
+
+  if (n > balance) {
+    return setToast('Not enough available balance');
+  }
+
+  if (trade && !trade.done) {
+    return setToast('Finish the current trade first.');
+  }
+
+  if (asset.price == null) {
+    return setToast('Live price is not connected.');
+  }
+
+  if (!supabase || !authSession?.user?.id) {
+    return setToast('Please sign in before trading.');
+  }
+
+  if (tradeStarting) return;
+
+  const rate = duration === 30 ? 0.20
+    : duration === 60 ? 0.40 : 0.80;
+
+  const targetPrice = Number(
+    (asset.price * (
+      direction === 'BUY'
+        ? 1 + rate / 100
+        : 1 - rate / 100
+    )).toFixed(asset.price < 10 ? 5 : 2)
+  );
+
+  setTradeStarting(true);
+
+  try {
+    const { data, error } = await supabase.rpc(
+      'igtrade_start_virtual_trade',
+      {
+        p_market: asset.symbol,
+        p_trade_type: direction,
+        p_amount: n,
+        p_duration_seconds: duration,
+        p_entry_price: Number(asset.price),
+        p_profit_percentage: Math.round(rate * 100),
+        p_target_price: targetPrice
+      }
+    );
+
+    if (error) throw error;
+
+    const nextBalance = Number(data?.balance);
+
+    if (!data?.trade_id || !Number.isFinite(nextBalance)) {
+      throw new Error('Invalid Supabase trade response.');
+    }
+
+    setBalance(nextBalance);
+
+    setTrade({
+      id: data.trade_id,
+      symbol: asset.symbol,
+      assetName: asset.name,
+      price: asset.price,
+      openPrice: asset.price,
+      targetPrice,
+      endPrice: null,
+      amount: n,
+      duration,
+      direction,
+      virtualRate: rate,
+      startedAt: new Date().toLocaleString(),
+      openTime: new Date().toLocaleString(),
+      done: false,
+      awaitingDone: false,
+      startCandles: [...(liveCandles[asset.symbol] || [])]
+    });
+
+    setRemaining(duration);
+    setToast('Trade started. Supabase balance updated.');
+
+  } catch (error) {
+    console.error('Trade start failed:', error);
+    setToast(`Trade failed: ${error.message}`);
+  } finally {
+    setTradeStarting(false);
+  }
+};
 
 
   const submitDeposit = async (e) => {
@@ -930,7 +1200,7 @@ const adjustMemberBalance = async (action = memberAction) => {
         {page === 'Trade' && <section className="page-section"><div className="page-title-row"><div><div className="eyebrow">Markets To Trades</div><h1><span className="gold-text">Trade</span></h1><p className="muted">Live market</p></div><span className={`status-pill ${tradeEnabled ? 'status-on' : 'status-off'}`}>{tradeEnabled ? '● Trading' : '● Trading'}</span></div>
           <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select"><span className="coin coin-BTC">{asset.symbol.slice(0, 1)}</span><div><strong>{asset.pair}</strong><small>{asset.name}</small></div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><Candles progress={duration - remaining} candles={liveCandles[asset.symbol] || []} targetPrice={trade && !trade.done ? trade.targetPrice : null} /><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">Live feed · 1-minute candles</span></div>
             {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div><div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div><small>profit</small><strong className="positive">{trade.done ? '+' : 'Expected +'}{money(trade.profit ?? trade.amount * trade.virtualRate)}</strong></div><div><small>rate</small><strong className="gold-text">{Math.round(trade.virtualRate * 100)}%</strong></div></div><div className="trade-timestamps"><span>Opened: {trade.openTime || trade.startedAt}</span><span>{trade.closeTime ? `Closed: ${trade.closeTime}` : trade.awaitingDone ? 'Timer complete — press Done to record this trade.' : 'Waiting for timer to finish.'}</span></div><Candles compact candles={trade.done || trade.awaitingDone ? (trade.endCandles || liveCandles[trade.symbol] || []) : (liveCandles[trade.symbol] || trade.startCandles || [])} targetPrice={trade.targetPrice} />{trade.awaitingDone && <button className="btn btn-gold btn-full" onClick={finishTrade}>Done — save trade to history</button>}{trade.done && <><p className="result-message">Saved to Profile → Trades with opening price, target price, closing price and chart snapshot.</p><button className="btn btn-gold" onClick={() => { setTrade(null); setRemaining(0) }}>Start another trade</button></>}</div>}
-          </div><div className="panel trade-controls"><div className="control-head"><h2>Place trade</h2><span className="tiny-tag">IG</span></div><div className="label-row"><label>Direction</label></div><div className="direction-row"><button className={`direction buy ${direction === 'BUY' ? 'direction-active' : ''}`} onClick={() => setDirection('BUY')}>↗ BUY</button><button className={`direction sell ${direction === 'SELL' ? 'direction-active' : ''}`} onClick={() => setDirection('SELL')}>↘ SELL</button></div><label className="field-label">Trade duration</label><div className="duration-options">{[30, 60, 120].map(d => <button key={d} className={duration === d ? 'duration-active' : ''} onClick={() => { setDuration(d); setAmount(d === 30 ? '100' : d === 60 ? '12000' : '35000') }}><strong>{d}s</strong><small>{d === 30 ? '20% rate' : d === 60 ? '40% rate' : '80% rate'}</small></button>)}</div><label className="field-label" htmlFor="amount">Amount (USDT)</label><div className="amount-input"><span>$</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="amount-hint">{duration === 30 ? 'Amount range: $20 – $10,000' : duration === 60 ? '$12,000 – $30,000' : '$35,000 – $99,000'} · Account balance: {money(balance)}</div><div className="estimate-box"><div><span>Illustrative result if completed</span><strong className="positive">+{money(Number(amount || 0) * (duration === 30 ? .2 : duration === 60 ? .4 : .8))}</strong></div><small>Profit/loss.</small></div><button className="btn btn-gold btn-full btn-large" disabled={!!(trade && !trade.done)} onClick={startTrade}>{!tradeEnabled ? 'Trading' : trade && !trade.done ? `Trade running · ${remaining}s` : 'Start trade'} <span>↗</span></button><p className="fine-print">IG trading platforms</p></div></div>
+          </div><div className="panel trade-controls"><div className="control-head"><h2>Place trade</h2><span className="tiny-tag">IG</span></div><div className="label-row"><label>Direction</label></div><div className="direction-row"><button className={`direction buy ${direction === 'BUY' ? 'direction-active' : ''}`} onClick={() => setDirection('BUY')}>↗ BUY</button><button className={`direction sell ${direction === 'SELL' ? 'direction-active' : ''}`} onClick={() => setDirection('SELL')}>↘ SELL</button></div><label className="field-label">Trade duration</label><div className="duration-options">{[30, 60, 120].map(d => <button key={d} className={duration === d ? 'duration-active' : ''} onClick={() => { setDuration(d); setAmount(d === 30 ? '100' : d === 60 ? '12000' : '35000') }}><strong>{d}s</strong><small>{d === 30 ? '20% rate' : d === 60 ? '40% rate' : '80% rate'}</small></button>)}</div><label className="field-label" htmlFor="amount">Amount (USDT)</label><div className="amount-input"><span>$</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="amount-hint">{duration === 30 ? 'Amount range: $20 – $10,000' : duration === 60 ? '$12,000 – $30,000' : '$35,000 – $99,000'} · Account balance: {money(balance)}</div><div className="estimate-box"><div><span>Illustrative result if completed</span><strong className="positive">+{money(Number(amount || 0) * (duration === 30 ? .2 : duration === 60 ? .4 : .8))}</strong></div><small>Profit/loss.</small></div><button className="btn btn-gold btn-full btn-large"disabled={tradeStarting || !!(trade && !trade.done)} onClick={startTrade}>{tradeStarting ? 'Saving trade...' : !tradeEnabled ? 'Trading' : trade && !trade.done ? `Trade running · ${remaining}s` : 'Start trade'} <span>↗</span></button><p className="fine-print">IG trading platforms</p></div></div>
         </section>}
 
         {page === 'Deposit' && <section className="page-section narrow-page"><div className="eyebrow">WALLET SERVICES</div><h1>Deposit <span className="gold-text">request</span></h1><p className="muted">Submit a request for review</p><div className="panel form-panel"><form onSubmit={submitDeposit}><label className="field-label">Select network</label><div className="network-options">{['TRC20', 'BTC', 'ETH'].map(n => <button type="button" key={n} className={depositMethod === n ? 'network-active' : ''} onClick={() => setDepositMethod(n)}><span className="network-symbol">{n === 'TRC20' ? '₮' : n === 'BTC' ? '₿' : '◆'}</span><strong>{n}</strong><small>{n === 'TRC20' ? 'USDT · Tron' : n === 'BTC' ? 'Bitcoin' : 'Ethereum'}</small></button>)}</div><label className="field-label">Deposit address</label>

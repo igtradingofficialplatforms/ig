@@ -37,12 +37,28 @@ export default function AdminPanel({
         </div>
       )) : <div className="empty-state"><strong>No requests in this filter</strong><p>New submitted requests will appear here.</p></div>}
 
-      <div className="admin-section-title">Member account balance controls</div>
+      <div className="admin-section-title">
+  Student current balances ({members.length})
+</div>
       <p className="muted admin-help">Approving a deposit/withdraw request only changes its status and shows the admin message. It never changes a member balance automatically. Use Add balance / Deduct balance to change the active available balance manually.</p>
       <label className="field-label">Member email / reference</label><input className="text-input" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder="member@example.com" />
       <label className="field-label">Amount (USDT virtual value)</label><input className="text-input" type="number" min="0.01" step="0.01" value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="100.00" />
       <div className="request-actions"><button className="btn btn-small btn-gold" onClick={() => adjustMemberBalance('add')}>＋ Add balance</button><button className="btn btn-small btn-outline" onClick={() => adjustMemberBalance('subtract')}>− Deduct balance</button></div>
-      {members.length ? members.map(m => <div className="admin-address" key={m.id}><span>{m.email}</span><code>{money(m.balance)}</code></div>) : <div className="empty-state"><p>No member adjustments yet.</p></div>}
+      {members.length ? members.map(m => (
+  <div className="admin-address" key={m.id}>
+    <span>
+      <strong>{m.name || 'Student'}</strong>
+      <small style={{ display: 'block', opacity: 0.7 }}>
+        {m.email}
+      </small>
+    </span>
+    <code>{money(m.balance)} USDT</code>
+  </div>
+)) : (
+  <div className="empty-state">
+    <p>No student profiles found.</p>
+  </div>
+)}
 
       <div className="admin-section-title">Deposit wallet addresses</div>
       <p className="muted admin-help">Paste only wallet addresses you control and verify the correct network. Saving here affects this browser preview only.</p>
