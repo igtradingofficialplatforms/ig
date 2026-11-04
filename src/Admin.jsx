@@ -6,10 +6,16 @@ export default function AdminPanel({
   adminOpen, setAdminOpen, tradeEnabled, setTradeEnabled, requests, approveRequest,
   memberEmail, setMemberEmail, memberAmount, setMemberAmount, memberAction,
   adjustMemberBalance, members, walletAddresses, setWalletAddresses, setToast,
-  telegramUrl, setTelegramUrl
+  telegramUrl, setTelegramUrl,
+walletQrCodes, saveWalletSettings
 }) {
   const [requestFilter, setRequestFilter] = useState('All');
   const [rejectionNotes, setRejectionNotes] = useState({});
+  const [qrFiles, setQrFiles] = useState({
+  TRC20: null,
+  BTC: null,
+  ETH: null
+});
   const filteredRequests = useMemo(() => requests.filter(r => requestFilter === 'All' || (requestFilter === 'Pending' ? r.status === 'Pending' : r.type === requestFilter)), [requests, requestFilter]);
   if (!adminOpen) return null;
 
@@ -60,10 +66,80 @@ export default function AdminPanel({
   </div>
 )}
 
-      <div className="admin-section-title">Deposit wallet addresses</div>
-      <p className="muted admin-help">Paste only wallet addresses you control and verify the correct network. Saving here affects this browser preview only.</p>
-      {['TRC20','BTC','ETH'].map(n => <div className="admin-address admin-address-edit" key={n}><span>{n}</span><input className="text-input" value={walletAddresses[n] || ''} onChange={e => setWalletAddresses(v => ({...v, [n]: e.target.value}))} placeholder={`Paste ${n} address`} /></div>)}
-      <button className="btn btn-outline btn-full" onClick={() => setToast('Wallet addresses updated in this browser preview only.')}>Save wallet settings</button>
+      <div className="admin-section-title">Deposit wallet addresses & QR codes</div>
+
+<p className="muted admin-help">
+  Set each wallet address and upload its matching QR image.
+  PNG, JPG or WEBP · Maximum 5 MB.
+</p>
+
+{['TRC20', 'BTC', 'ETH'].map(n => (
+  <div className="admin-address admin-address-edit" key={n}>
+    <span>{n}</span>
+    <input
+      className="text-input"
+      value={walletAddresses[n] || ''}
+      onChange={e =>
+        setWalletAddresses(v => ({
+          ...v,
+          [n]: e.target.value
+        }))
+      }
+      placeholder={`Paste ${n} address`}
+    />
+
+    <label className="field-label">
+      {n} QR image
+    </label>
+
+    <input
+      className="text-input"
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      onChange={e =>
+        setQrFiles(v => ({
+          ...v,
+          [n]: e.target.files?.[0] || null
+        }))
+      }
+    />
+
+    {qrFiles[n] && (
+      <small>Selected: {qrFiles[n].name}</small>
+    )}
+
+    {walletQrCodes?.[n] && (
+      <img
+        src={walletQrCodes[n]}
+        alt={`${n} saved QR`}
+        style={{
+          display: 'block',
+          width: 150,
+          height: 150,
+          objectFit: 'contain',
+          marginTop: 10,
+          background: '#fff',
+          borderRadius: 10,
+          padding: 8
+        }}
+      />
+    )}
+  </div>
+))}
+
+<button
+  className="btn btn-gold btn-full"
+  onClick={async () => {
+    await saveWalletSettings(qrFiles);
+    setQrFiles({
+      TRC20: null,
+      BTC: null,
+      ETH: null
+    });
+  }}
+>
+  Save wallet settings
+</button>
 
       <div className="admin-section-title">Customer care</div>
       <label className="field-label">Telegram support URL</label><input className="text-input" value={telegramUrl} onChange={e => setTelegramUrl(e.target.value)} placeholder="https://t.me/your_support" />

@@ -196,7 +196,7 @@ const setTradeEnabled = async (value) => {
   setTradeEnabledState(false)
 
   if (!supabase) {
-    setToast('Supabase is not configured. Trading remains OFF.')
+    setToast('Trading.')
     return
   }
 
@@ -241,14 +241,18 @@ const setTradeEnabled = async (value) => {
   const [memberAmount, setMemberAmount] = useState('100')
   const [memberAction, setMemberAction] = useState('add')
   const [walletAddresses, setWalletAddresses] = useState({ TRC20: '', BTC: '', ETH: '' })
-
+const [walletQrCodes, setWalletQrCodes] = useState({
+  TRC20: '',
+  BTC: '',
+  ETH: ''
+});
   useEffect(() => {
     if (!supabase) return;
 
     const loadWalletAddresses = async () => {
       const { data, error } = await supabase
         .from('deposit_addresses')
-        .select('currency, network, wallet_address, instructions, is_active')
+        .select('currency, network, wallet_address, instructions, is_active, qr_path')
         .eq('is_active', true);
 
       if (error) {
@@ -430,7 +434,7 @@ useEffect(() => {
         ? null : Number(row.target_price),
       endPrice: row.close_price == null
         ? null : Number(row.close_price),
-      profit: Number(row.result || 0),
+      profit: Number(row.profit_loss || 0),
       done: ['won', 'lost', 'cancelled'].includes(row.status),
       startedAt: row.opened_at,
       openTime: row.opened_at,
@@ -850,8 +854,8 @@ const finishTrade = async () => {
     ]);
 
     setToast(
-      `Trade completed. Profit: ${money(profit)}. Supabase balance saved.`
-    );
+  `Trade completed. Profit: ${money(profit)}`
+);
 
   } catch (error) {
     settledTradeIds.current.delete(tradeId);
@@ -962,7 +966,7 @@ const startTrade = async () => {
     });
 
     setRemaining(duration);
-    setToast('Trade started. Supabase balance updated.');
+    setToast('Trade started');
 
   } catch (error) {
     console.error('Trade start failed:', error);
@@ -971,70 +975,168 @@ const startTrade = async () => {
     setTradeStarting(false);
   }
 };
+const saveWalletSettings = async (qrFiles) => {
+  if (!supabase || !authSession?.user?.id) {
+    return setToast('Please sign in as admin first.');
+  }
 
+  const networks = [
+    { key: 'TRC20', currency: 'USDT', network: 'TRC20' },
+    { key: 'BTC', currency: 'BTC', network: 'Bitcoin network' },
+    { key: 'ETH', currency: 'ETH', network: 'Ethereum (ERC20)' }
+  ];
+
+  try {
+    setToast('Saving wallet settings...');
+
+    const updatedQrCodes = { ...walletQrCodes };
+
+    for (const item of networks) {
+      const file = qrFiles?.[item.key];
+      let qrPath = null;
+
+      if (file) {
+        if (!file.type.startsWith('image/')) {
+          throw new Error(`${item.key}: Please select an image.`);
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(`${item.key}: Image must be under 5 MB.`);
+        }
+
+        const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+        qrPath = `wallet-qr/${item.key}-${crypto.randomUUID()}.${extension}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('deposit-qr-codes')
+          .upload(qrPath, file, {
+            contentType: file.type,
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicData } = supabase.storage
+          .from('deposit-qr-codes')
+          .getPublicUrl(qrPath);
+
+        updatedQrCodes[item.key] = publicData.publicUrl;
+      }
+
+      const updateValues = {
+        wallet_address: walletAddresses[item.key] || ''
+      };
+
+      if (qrPath) updateValues.qr_path = qrPath;
+
+      const { data: existing, error: findError } = await supabase
+        .from('deposit_addresses')
+        .select('id')
+        .eq('currency', item.currency)
+        .eq('network', item.network)
+        .maybeSingle();
+
+      if (findError) throw findError;
+
+      if (existing) {
+        const { error } = await supabase
+          .from('deposit_addresses')
+          .update(updateValues)
+          .eq('id', existing.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('deposit_addresses')
+          .insert({
+            currency: item.currency,
+            network: item.network,
+            ...updateValues,
+            is_active: true
+          });
+
+        if (error) throw error;
+      }
+    }
+
+    setWalletQrCodes(updatedQrCodes);
+    setToast('Wallet addresses and QR codes saved successfully.');
+    return true;
+
+  } catch (error) {
+    console.error('Wallet settings save failed:', error);
+    setToast(`Wallet save failed: ${error.message}`);
+    return false;
+  }
+};
 
   const submitDeposit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const n = Number(depositAmount);
-    const userId = authSession?.user?.id;
+  const n = Number(depositAmount);
+  const userId = authSession?.user?.id;
 
-    if (!supabase || !userId) {
-      return setToast('Please log in first.');
-    }
+  if (!supabase || !userId) {
+    return setToast('Please log in first.');
+  }
 
-    if (!Number.isFinite(n) || n < 50) {
-      return setToast('Minimum deposit request is $50.');
-    }
+  if (!Number.isFinite(n) || n < 50) {
+    return setToast('Minimum deposit request is $50.');
+  }
 
-    if (!depositFile?.file) {
-      return setToast('Please attach your deposit screenshot.');
-    }
+  try {
+    let proofPath = null;
 
-    try {
+    if (depositFile?.file) {
       setToast('Uploading screenshot...');
 
-      const proofPath = await uploadDepositProof(
+      proofPath = await uploadDepositProof(
         depositFile.file,
         userId
       );
-
-      const { data, error } = await supabase
-        .from('deposit_requests')
-        .insert({
-          user_id: userId,
-          amount: n,
-          method: depositMethod,
-          network: depositMethod,
-          proof_url: proofPath,
-          proof_path: proofPath,
-          status: 'Pending'
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      console.log('SUPABASE INSERT SUCCESS:', data);
-      setRequests(r => [
-  {
-    id: data.id,
-    type: 'Deposit',
-    method: data.method,
-    amount: Number(data.amount),
-    status: data.status,
-    created: data.created_at,
-    proof_path: data.proof_path || data.proof_url
-  },
-  ...r
-]);
-      setToast('Please wait a few moments while we process your request.');
-      setDepositFile(null);
-    } catch (error) {
-      console.error('Deposit submission failed:', error);
-      setToast(`Deposit failed: ${error.message}`);
     }
-  };
+
+    const { data, error } = await supabase
+      .from('deposit_requests')
+      .insert({
+        user_id: userId,
+        amount: n,
+        method: depositMethod,
+        network: depositMethod,
+        proof_url: proofPath,
+        proof_path: proofPath,
+        status: 'Pending'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    setRequests(r => [
+      {
+        id: data.id,
+        type: 'Deposit',
+        method: data.method,
+        amount: Number(data.amount),
+        status: data.status,
+        created: data.created_at,
+        proof_path: data.proof_path || data.proof_url
+      },
+      ...r
+    ]);
+
+    setToast('Deposit request submitted successfully.');
+    setDepositFile(null);
+    setDepositAmount('');
+
+    const receiptInput = document.getElementById('receipt');
+    if (receiptInput) receiptInput.value = '';
+
+  } catch (error) {
+    console.error('Deposit submission failed:', error);
+    setToast(`Deposit failed: ${error.message}`);
+  }
+};
 
 
   const submitWithdraw = async (e) => {
@@ -1120,7 +1222,12 @@ const startTrade = async () => {
   }
 
   if (isAdminRoute && authSession && isAdmin) {
-    return <div className="app-shell admin-only-shell"><main className="main-content" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}><div className="page-title"><div className="eyebrow">RESTRICTED AREA</div><h1>Admin controls</h1><p className="muted">Signed in as an authorized admin.</p><button className="btn btn-outline" onClick={async () => { await supabase?.auth.signOut(); setAuthSession(null); setIsAdmin(false); setAdminOpen(false); window.location.href = '/' }}>Sign out</button></div><AdminPanel adminOpen={true} setAdminOpen={() => { window.location.href = '/' }} tradeEnabled={tradeEnabled} setTradeEnabled={setTradeEnabled} requests={requests} approveRequest={approveRequest} memberEmail={memberEmail} setMemberEmail={setMemberEmail} memberAmount={memberAmount} setMemberAmount={setMemberAmount} memberAction={memberAction} setMemberAction={setMemberAction} adjustMemberBalance={adjustMemberBalance} members={members} walletAddresses={walletAddresses} setWalletAddresses={setWalletAddresses} setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />{toast && <div className="toast">{toast}<button onClick={() => setToast('')}>×</button></div>}</main></div>
+    return <div className="app-shell admin-only-shell"><main className="main-content" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}><div className="page-title"><div className="eyebrow">RESTRICTED AREA</div><h1>Admin controls</h1><p className="muted">Signed in as an authorized admin.</p><button className="btn btn-outline" onClick={async () => { await supabase?.auth.signOut(); setAuthSession(null); setIsAdmin(false); setAdminOpen(false); window.location.href = '/' }}>Sign out</button></div><AdminPanel adminOpen={true} setAdminOpen={() => { window.location.href = '/' }} tradeEnabled={tradeEnabled} setTradeEnabled={setTradeEnabled} requests={requests} approveRequest={approveRequest} memberEmail={memberEmail} setMemberEmail={setMemberEmail} memberAmount={memberAmount} setMemberAmount={setMemberAmount} memberAction={memberAction} setMemberAction={setMemberAction} adjustMemberBalance={adjustMemberBalance} members={members}
+walletAddresses={walletAddresses}
+setWalletAddresses={setWalletAddresses}
+walletQrCodes={walletQrCodes}
+saveWalletSettings={saveWalletSettings}
+setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />{toast && <div className="toast">{toast}<button onClick={() => setToast('')}>×</button></div>}</main></div>
   }
 
   return <div className="app-shell" dir={language === 'ar' || language === 'ur' ? 'rtl' : 'ltr'}>
@@ -1218,7 +1325,25 @@ const startTrade = async () => {
               Copy
             </button>
           </div>
-
+          {walletQrCodes[depositMethod] && (
+  <div className="deposit-qr-display">
+    <label className="field-label">Scan to deposit</label>
+    <img
+      src={walletQrCodes[depositMethod]}
+      alt={`${depositMethod} deposit QR code`}
+      style={{
+        display: 'block',
+        width: 'min(240px, 100%)',
+        maxHeight: 240,
+        objectFit: 'contain',
+        margin: '12px auto 20px',
+        padding: 12,
+        background: '#fff',
+        borderRadius: 12
+      }}
+    />
+  </div>
+)}
           <label className="field-label" htmlFor="deposit-amount">
             Amount (USDT) · Minimum $50
           </label>
@@ -1264,7 +1389,7 @@ const startTrade = async () => {
                 };
                 reader.readAsDataURL(file);
               }}
-              required
+              
             />
           </label>
 
@@ -1542,8 +1667,13 @@ const startTrade = async () => {
           memberAmount={memberAmount} setMemberAmount={setMemberAmount}
           memberAction={memberAction} setMemberAction={setMemberAction}
           adjustMemberBalance={adjustMemberBalance} members={members}
-          walletAddresses={walletAddresses} setWalletAddresses={setWalletAddresses}
-          setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl}
+          walletAddresses={walletAddresses}
+setWalletAddresses={setWalletAddresses}
+walletQrCodes={walletQrCodes}
+saveWalletSettings={saveWalletSettings}
+setToast={setToast}
+telegramUrl={telegramUrl}
+setTelegramUrl={setTelegramUrl}
         />}
 
         {loginOpen && <div className="modal-backdrop" onClick={() => { if (!isAdminRoute) setLoginOpen(false) }}><div className="modal panel" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => { if (!isAdminRoute) setLoginOpen(false) }} aria-label="Close">×</button><Logo /><h2>{isAdminRoute ? (isAdmin ? 'Admin Panel' : 'Admin sign in') : (authMode === 'register' ? 'Create your IGtrade account' : 'Welcome to IGtrade')}</h2><p className="muted">{isAdminRoute ? 'Only an account approved as admin can continue.' : (authMode === 'register' ? 'Register using your email address or phone number.' : 'Sign in using your email address or phone number.')}</p>{isAdminRoute && isAdmin ? <><p className="fine-print">Admin access verified.</p><button className="btn btn-gold btn-full" onClick={() => { setLoginOpen(false); setAdminOpen(true) }}>Open Admin Panel</button></> : <form onSubmit={handleAuthSubmit}>{!isAdminRoute && <div className="history-tabs" style={{ display: 'flex', width: '100%', gap: 8, marginTop: 16 }}><button type="button" className={authMode === 'login' ? 'selected' : ''} onClick={() => setAuthMode('login')} style={{ flex: 1 }}>Sign in</button><button type="button" className={authMode === 'register' ? 'selected' : ''} onClick={() => setAuthMode('register')} style={{ flex: 1 }}>Register</button></div>}{authMode === 'register' && !isAdminRoute && <><label className="field-label">{t('Full name')}</label><input className="text-input" value={authName} onChange={e => setAuthName(e.target.value)} placeholder={t('Full name')} autoComplete="name" required /></>}<label className="field-label">{t('Email or phone')}</label><div className="phone-entry-row"><select className="text-input country-code-select" aria-label="Country code" value={countryCode} onChange={e => setCountryCode(e.target.value)}><option value="">{t('Country code')}</option>{countryCallingCodes.map(([iso, country, code]) => <option key={iso} value={code}>{country} ({code})</option>)}</select><input className="text-input phone-number-input" value={authIdentifier} onChange={e => setAuthIdentifier(e.target.value)} placeholder={t('Phone number') + ' / email'} autoComplete="username" required /></div><label className="field-label">{t('Password')}</label><input className="text-input" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="At least 6 characters" autoComplete={authMode === 'register' ? 'new-password' : 'current-password'} required />{authMode === 'register' && !isAdminRoute && <><label className="field-label">{t('Confirm password')}</label><input className="text-input" type="password" value={authConfirm} onChange={e => setAuthConfirm(e.target.value)} placeholder="Repeat password" autoComplete="new-password" required /></>}<button className="btn btn-gold btn-full" type="submit" disabled={authBusy}>{authBusy ? 'Please wait…' : (authMode === 'register' && !isAdminRoute ? 'Create account' : t('Continue'))}</button>{!isAdminRoute && authMode === 'login' && <button type="button" className="text-button" onClick={async () => { if (!supabase) return setToast('Connect Supabase first to reset a password.'); if (!authIdentifier.includes('@')) return setToast('Password reset currently requires the email address.'); const { error } = await supabase.auth.resetPasswordForEmail(authIdentifier.trim()); setToast(error ? error.message : 'Password reset email sent if the account exists.') }}>Forgot password?</button>}{!supabase && <p className="fine-print">Warning: only tick this box if you are using a trusted computer
