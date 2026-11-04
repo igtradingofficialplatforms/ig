@@ -887,10 +887,6 @@ const startTrade = async () => {
     );
   }
 
-  if (!tradeEnabled) {
-    return setToast('Trading is currently disabled.');
-  }
-
   if (n > balance) {
     return setToast('Not enough available balance');
   }
@@ -1304,18 +1300,18 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
           <CustomerService telegramUrl={telegramUrl} />
         </section>}
 
-        {page === 'Trade' && <section className="page-section"><div className="page-title-row"><div><div className="eyebrow">Markets To Trades</div><h1><span className="gold-text">Trade</span></h1><p className="muted">Live market</p></div><span className={`status-pill ${tradeEnabled ? 'status-on' : 'status-off'}`}>{tradeEnabled ? '● Trading' : '● Trading'}</span></div>
+        {page === 'Trade' && <section className="page-section"><div className="page-title-row"><div><div className="eyebrow">Markets To Trades</div><h1><span className="gold-text">Trade</span></h1><p className="muted">Live market</p></div></div>
           <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select"><span className="coin coin-BTC">{asset.symbol.slice(0, 1)}</span><div><strong>{asset.pair}</strong><small>{asset.name}</small></div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><Candles progress={duration - remaining} candles={liveCandles[asset.symbol] || []} targetPrice={trade && !trade.done ? trade.targetPrice : null} /><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">Live feed · 1-minute candles</span></div>
             {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div><div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div>
-  <small>{trade.done && trade.profit < 0 ? 'LOSS' : 'PROFIT'}</small>
+  <small>{!trade.done ? 'EXPECTED RESULT' : trade.profit < 0 ? 'LOSS' : 'PROFIT'}</small>
   <strong className={
     trade.done
       ? (trade.profit < 0 ? 'negative' : 'positive')
-      : 'positive'
+      : 'gold-text'
   }>
     {trade.done
       ? `${trade.profit < 0 ? '-' : '+'}${money(Math.abs(trade.profit))}`
-      : `Expected +${money(trade.amount * trade.virtualRate)}`
+      : `Expected ±${money(trade.amount * trade.virtualRate)}`
     }
   </strong>
 </div><div><small>rate</small><strong className="gold-text">{Math.round(trade.virtualRate * 100)}%</strong></div></div><div className="trade-timestamps"><span>Opened: {trade.openTime || trade.startedAt}</span><span>{trade.closeTime ? `Closed: ${trade.closeTime}` : trade.awaitingDone ? 'Timer complete — press Done to record this trade.' : 'Waiting for timer to finish.'}</span></div><Candles compact candles={trade.done || trade.awaitingDone ? (trade.endCandles || liveCandles[trade.symbol] || []) : (liveCandles[trade.symbol] || trade.startCandles || [])} targetPrice={trade.targetPrice} />{trade.awaitingDone && <button className="btn btn-gold btn-full" onClick={finishTrade}>Done — save trade to history</button>}{trade.done && <><p className="result-message">Saved to Profile → Trades with opening price, target price, closing price and chart snapshot.</p><button className="btn btn-gold" onClick={() => { setTrade(null); setRemaining(0) }}>Start another trade</button></>}</div>}
@@ -1604,7 +1600,9 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
                         <small>{t.resultAt} · {t.duration}s trade · click for details</small>
                       </div>
                       <div className="history-amount">
-                        <strong className="positive">+{money(t.profit)}</strong>
+                        <strong className={t.profit < 0 ? 'negative' : 'positive'}>
+                        {t.profit < 0 ? '-' : '+'}{money(Math.abs(t.profit))}
+                         </strong>
                         <small>
                           {expandedTradeId === (t.id || i) ? 'Hide details ↑' : 'View details ↓'}
                         </small>
@@ -1617,7 +1615,12 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
                         <div><small>Target price</small><strong>{quotePrice(t.targetPrice, t.symbol)}</strong></div>
                         <div><small>Closing price</small><strong>{quotePrice(t.endPrice, t.symbol)}</strong></div>
                         <div><small>Trade amount</small><strong>{money(t.amount)}</strong></div>
-                        <div><small>Profit</small><strong className="positive">+{money(t.profit)}</strong></div>
+                        <div>
+                       <small>{t.profit < 0 ? 'Loss' : 'Profit'}</small>
+                        <strong className={t.profit < 0 ? 'negative' : 'positive'}>
+                         {t.profit < 0 ? '-' : '+'}{money(Math.abs(t.profit))}
+                           </strong>
+                          </div>
                         <div><small>Rate</small><strong>{Math.round(t.virtualRate * 100)}%</strong></div>
                         <div className="history-chart-full">
                           <Candles compact candles={t.endCandles || t.startCandles || []} />
