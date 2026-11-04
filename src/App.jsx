@@ -388,24 +388,33 @@ useEffect(() => {
 
   let active = true;
 
-  const refreshAccount = async () => {
-    const [
-      { data: profile, error: profileError },
-      { data: rows, error: tradeError }
-    ] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('virtual_balance')
-        .eq('id', userId)
-        .maybeSingle(),
+  
+const refreshAccount = async () => {
+  const [
+    { data: profile, error: profileError },
+    { data: rows, error: tradeError },
+    { data: withdrawRows, error: withdrawError }
+  ] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('virtual_balance')
+      .eq('id', userId)
+      .maybeSingle(),
 
-      supabase
-        .from('trades')
-        .select('*')
-        .eq('user_id', userId)
-        .order('opened_at', { ascending: false })
-        .limit(100)
-    ]);
+    supabase
+      .from('trades')
+      .select('*')
+      .eq('user_id', userId)
+      .order('opened_at', { ascending: false })
+      .limit(100),
+
+    supabase
+      .from('withdrawal_requests')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+  ]);
 
     if (!active) return;
 
@@ -445,6 +454,26 @@ useEffect(() => {
       endCandles: row.snapshot?.candles || [],
       startCandles: []
     })));
+    
+    if (withdrawError) {
+      console.error('Withdraw history error:', withdrawError.message);
+    } else {
+      const loadedWithdrawals = (withdrawRows || []).map(row => ({
+        id: row.id,
+        type: 'Withdraw',
+        method: row.method,
+        amount: Number(row.amount),
+        address: row.wallet_address,
+        status: row.status,
+        created: row.created_at,
+        adminNote: row.admin_note || ''
+      }));
+
+      setRequests(current => [
+        ...current.filter(r => r.type !== 'Withdraw'),
+        ...loadedWithdrawals
+      ]);
+    }
   };
 
   refreshAccount();
@@ -1651,16 +1680,22 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
                       <strong>{r.type} · {r.method}</strong>
                       <small>{r.created}</small>
                     </div>
-                    <div className="history-amount">
-                      <strong>{money(r.amount)}</strong>
-                      <small>{r.status}</small>
+                    
+                     <div className="history-amount">
+                  <strong className={r.type === 'Withdraw' ? 'negative' : 'positive'}>
+                   {r.type === 'Withdraw' ? '-' : '+'}{money(Math.abs(Number(r.amount)))}
+                </strong>
+                 <small>
+                Status: {r.status}
+                    </small>
                     </div>
-                    {r.adminNote && (
-                      <div className="history-detail">
-                        <small>Admin message / rejection reason</small>
-                        <p>{r.adminNote}</p>
-                      </div>
-                    )}
+                  {r.adminNote && (
+                    <div className="history-detail">
+                  <small>Dear user</small>
+                   <p>{r.adminNote}</p>
+                       </div>
+                      )}
+
                   </div>
                 ))
               ) : (
