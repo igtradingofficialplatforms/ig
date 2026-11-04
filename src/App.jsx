@@ -541,7 +541,7 @@ useEffect(() => {
     let cryptoSocket
     const connectCrypto = () => {
       if (closed) return
-      cryptoSocket = new WebSocket(`wss://stream.binance.com:443/stream?streams=${streams}`)
+      cryptoSocket = new WebSocket(`wss://data-stream.binance.vision:443/stream?streams=${streams}`)
       cryptoSocket.onopen = () => setMarketConnection(v => ({ ...v, crypto: 'live' }))
       cryptoSocket.onmessage = (event) => {
         try {
