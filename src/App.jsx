@@ -789,10 +789,11 @@ useEffect(() => {
   
 const refreshAccount = async () => {
   const [
-    { data: profile, error: profileError },
-    { data: rows, error: tradeError },
-    { data: withdrawRows, error: withdrawError }
-  ] = await Promise.all([
+  { data: profile, error: profileError },
+  { data: rows, error: tradeError },
+  { data: withdrawRows, error: withdrawError },
+  { data: depositRows, error: depositError }
+] = await Promise.all([
     supabase
       .from('profiles')
       .select('virtual_balance')
@@ -811,10 +812,35 @@ const refreshAccount = async () => {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
+      .limit(100),
+    supabase
+      .from('deposit_requests')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
       .limit(100)
   ]);
 
     if (!active) return;
+    if (depositError) {
+  console.error('Deposit history error:', depositError.message);
+} else {
+  const loadedDeposits = (depositRows || []).map(row => ({
+    id: row.id,
+    type: 'Deposit',
+    method: row.method || row.network || '',
+    amount: Number(row.amount),
+    status: row.status,
+    created: row.created_at,
+    proof_path: row.proof_path || row.proof_url || '',
+    adminNote: row.admin_note || ''
+  }));
+
+  setRequests(current => [
+    ...current.filter(r => r.type !== 'Deposit'),
+    ...loadedDeposits
+  ]);
+}
 
     if (profileError) {
       console.error('Balance load error:', profileError.message);
@@ -823,11 +849,9 @@ const refreshAccount = async () => {
     }
 
     if (tradeError) {
-      console.error('Trade history error:', tradeError.message);
-      return;
-    }
-
-    setTradeHistory((rows || []).map(row => ({
+  console.error('Trade history error:', tradeError.message);
+} else {
+  setTradeHistory((rows || []).map(row => ({
       id: row.id,
       symbol: row.market,
       assetName: row.market,
@@ -851,8 +875,8 @@ const refreshAccount = async () => {
         : '',
       endCandles: row.snapshot?.candles || [],
       startCandles: []
-    })));
-    
+      })));
+}
     if (withdrawError) {
       console.error('Withdraw history error:', withdrawError.message);
     } else {
@@ -1840,7 +1864,9 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
       </aside>
 
       <main className="main-content">
-        {page === 'Home' && <section className="page-section"><WithdrawalTicker />
+  <WithdrawalTicker />
+
+  {page === 'Home' && <section className="page-section">
           <div className="welcome-row"><div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade smarter with confidence.</h1><p className="hero-subtitle">Trade CFDs with the world’s No.1 provider1</p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div><div className="balance-card"><div className="balance-title"><span className="wallet-icon">＄</span><span>USDT balance</span></div><div className="balance-number">{money(balance)} <span>USDT</span></div><div className="balance-footer"><span className="positive">● Available funds</span><button className="text-button" onClick={() => setPage('Profile')}>View wallet ↗</button></div></div></div>
           <div className="ticker-wrap"><div className="ticker-track">{[...markets, ...markets].map((m, i) => <div className="ticker-item" key={`${m.symbol}-${i}`}><strong>{m.name}</strong><span>{quotePrice(m.price, m.symbol)}</span><small className={m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</small></div>)}</div></div>
           <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2><p className="muted">Market crypto {marketConnection.crypto}; stocks, forex, indices and gold {marketConnection.other}.Explore diversified tools to advance your trading strategy and get direct order execution from charts.</p><p className="muted">Crypto {marketConnection.crypto}. Stocks/Gold {marketConnection.other}.IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
@@ -2241,9 +2267,15 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
                   <div className="history-row" key={r.id}>
                     <span className="history-icon">{r.type === 'Deposit' ? '↓' : '↑'}</span>
                     <div className="history-main">
-                      <strong>{r.type} · {r.method}</strong>
-                      <small>{r.created}</small>
-                    </div>
+                 <strong>{r.type} · {r.method}</strong>
+              <small>{r.created}</small>
+
+             {r.type === 'Withdraw' && (
+            <small className="history-wallet-address">
+          Wallet Address: {r.address || 'Address unavailable'}
+             </small>
+             )}
+             </div>
                     
                      <div className="history-amount">
                   <strong className={r.type === 'Withdraw' ? 'negative' : 'positive'}>
