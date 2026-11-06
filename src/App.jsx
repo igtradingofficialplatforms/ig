@@ -1,3 +1,11 @@
+import {
+  SiBitcoin,
+  SiEthereum,
+  SiSolana,
+  SiApple,
+  SiNvidia,
+  SiTesla
+} from "react-icons/si";
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import AdminPanel from './Admin.jsx'
 import CustomerService from './CustomerService.jsx'
@@ -8,7 +16,6 @@ const supabase = isSupabaseConfigured ? createClient(supabaseConfig.url, supabas
 console.log('Supabase URL loaded:', Boolean(import.meta.env.VITE_SUPABASE_URL))
 console.log('Supabase key loaded:', Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY))
 console.log('Supabase configured:', isSupabaseConfigured)
-
 async function uploadDepositProof(file, userId) {
   if (!supabase) throw new Error('Supabase is not configured.')
   if (!file) throw new Error('Please attach a deposit screenshot.')
@@ -22,9 +29,7 @@ async function uploadDepositProof(file, userId) {
   const extension = file.type === 'image/png'
     ? 'png'
     : file.type === 'image/webp' ? 'webp' : 'jpg'
-
   const path = `${userId}/${crypto.randomUUID()}.${extension}`
-
   const { error } = await supabase.storage
     .from('deposit-proofs')
     .upload(path, file, {
@@ -52,8 +57,6 @@ const marketDefinitions = [
   { symbol: 'DAX', pair: 'DAX', name: 'Germany 40', kind: 'Index', provider: 'Twelve Data' },
   { symbol: 'DJI', pair: 'DJI', name: 'Wall Street', kind: 'Index', provider: 'Twelve Data' },
 ]
-
-
 const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const quotePrice = (n, symbol) => {
   if (n == null || !Number.isFinite(Number(n))) return 'Waiting for live feed'
@@ -65,31 +68,284 @@ function Logo() {
   return <div className="brand"><span className="ig-square-logo">IG</span><span><span className="brand-ig-red">IG</span><span className="brand-gold">trade</span></span></div>
 }
 
-function Candles({ compact = false, progress = 0, candles = [], targetPrice = null }) {
-  const width = Math.max(1, candles.length) * 12
-  const values = [...candles.flatMap(c => [c.high, c.low]), ...(targetPrice == null ? [] : [targetPrice])]
-  const max = values.length ? Math.max(...values) : 1
-  const min = values.length ? Math.min(...values) : 0
-  const span = Math.max(max - min, 0.000001)
-  const y = value => 94 - ((value - min) / span) * 82
-  if (!candles.length) return <div className={`chart ${compact ? 'chart-compact' : ''} chart-empty`}><div className="empty-state"><strong>Waiting for live candle data</strong><p>No sample candles are shown as real market data.</p></div></div>
-  return <div className={`chart ${compact ? 'chart-compact' : ''}`}>
-    <div className="chart-grid"><i /><i /><i /><i /></div>
-    <svg viewBox={`0 0 ${width} 100`} preserveAspectRatio="none" role="img" aria-label="Live market candlestick chart">
-      {candles.map((c, i) => {
-        const x = i * 12 + 3
-        const top = y(Math.max(c.open, c.close))
-        const bottom = y(Math.min(c.open, c.close))
-        return <g key={c.time} className={c.up ? 'candle-up' : 'candle-down'}>
-          <line x1={x + 3} x2={x + 3} y1={y(c.high)} y2={y(c.low)} stroke="currentColor" strokeWidth="1.2" />
-          <rect x={x} y={top} width="6" height={Math.max(1.5, bottom - top)} rx="1" fill="currentColor" />
-        </g>
-      })}
-      {targetPrice != null && <g><line x1="0" x2={width} y1={y(targetPrice)} y2={y(targetPrice)} stroke="#d8b66d" strokeWidth="1.5" strokeDasharray="5 3" /><text x="4" y={Math.max(8, y(targetPrice) - 3)} fill="#d8b66d" fontSize="5">TARGET</text></g>}
-      {progress > 0 && <line x1="0" x2={width} y1={35 + (progress % 18)} y2={35 + (progress % 18)} stroke="#d6b56d" strokeDasharray="4 3" opacity=".8" />}
-    </svg>
-    <div className="chart-labels"><span>Older</span><span>Live · 1m candles</span><span>Now</span></div>
-  </div>
+function Candles({
+  compact = false,
+  progress = 0,
+  candles = [],
+  targetPrice = null,
+  entryPrice = null,
+  tradeSecondsLeft = null,
+  tradeDuration = 0,
+  currentPrice = null
+}) {
+  const width = Math.max(1, candles.length) * 12;
+
+  const values = [
+    ...candles.flatMap(c => [c.high, c.low]),
+    ...(targetPrice == null ? [] : [targetPrice]),
+    ...(entryPrice == null ? [] : [entryPrice]),
+    ...(currentPrice == null ? [] : [currentPrice])
+  ].filter(Number.isFinite);
+
+  const rawMax = values.length ? Math.max(...values) : 1;
+  const rawMin = values.length ? Math.min(...values) : 0;
+  const padding = Math.max((rawMax - rawMin) * 0.08, 0.01);
+
+  const max = rawMax + padding;
+  const min = rawMin - padding;
+  const span = Math.max(max - min, 0.000001);
+
+  const y = value => 94 - ((value - min) / span) * 82;
+
+  const isSimulatedGold = candles.some(c => c.simulated);
+
+  const elapsedPercent =
+    tradeDuration > 0 && tradeSecondsLeft != null
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            ((tradeDuration - tradeSecondsLeft) / tradeDuration) * 100
+          )
+        )
+      : 0;
+
+  const timerText =
+    tradeSecondsLeft == null
+      ? ''
+      : `${String(Math.floor(tradeSecondsLeft / 60)).padStart(2, '0')}:${String(tradeSecondsLeft % 60).padStart(2, '0')}`;
+
+  const priceLabels = Array.from(
+    { length: 5 },
+    (_, i) => max - (span * i / 4)
+  );
+
+  if (!candles.length) {
+    return (
+      <div className={`chart ${compact ? 'chart-compact' : ''} chart-empty`}>
+        <div className="empty-state">
+          <strong>Waiting for candle data</strong>
+          <p>No sample candles are shown as real market data.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`chart ${compact ? 'chart-compact' : ''}`}>
+
+      {tradeSecondsLeft != null && tradeDuration > 0 && (
+        <div style={{
+          padding: '10px 12px',
+          background: '#17140e',
+          borderBottom: '1px solid #3a3020'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8
+          }}>
+            <span style={{
+              color: '#d8b66d',
+              fontSize: 11,
+              fontWeight: 700
+            }}>
+              GOLD TRADE · {tradeSecondsLeft === 0 ? 'TIME COMPLETE' : 'TIME REMAINING'}
+            </span>
+
+            <strong style={{
+              color: '#f5d58a',
+              fontSize: 20,
+              fontVariantNumeric: 'tabular-nums'
+            }}>
+              {timerText}
+            </strong>
+          </div>
+
+          <div style={{
+            height: 5,
+            background: '#383126',
+            borderRadius: 10,
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${elapsedPercent}%`,
+              background: 'linear-gradient(90deg, #9b742c, #f5d58a)',
+              borderRadius: 10,
+              transition: 'width 0.8s linear'
+            }} />
+          </div>
+        </div>
+      )}
+
+      <div style={{
+        display: 'flex',
+        width: '100%',
+        minWidth: 0
+      }}>
+
+        <div style={{
+          flex: 1,
+          minWidth: 0,
+          position: 'relative'
+        }}>
+          <div className="chart-grid">
+            <i /><i /><i /><i />
+          </div>
+
+          <svg
+            viewBox={`0 0 ${width} 100`}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="Market candlestick chart"
+            style={{
+              display: 'block',
+              width: '100%',
+              height: compact ? 110 : 260
+            }}
+          >
+            {candles.map((c, i) => {
+              const x = i * 12 + 3;
+              const top = y(Math.max(c.open, c.close));
+              const bottom = y(Math.min(c.open, c.close));
+
+              return (
+                <g key={c.time} className={c.up ? 'candle-up' : 'candle-down'}>
+                  <line
+                    x1={x + 3}
+                    x2={x + 3}
+                    y1={y(c.high)}
+                    y2={y(c.low)}
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  />
+                  <rect
+                    x={x}
+                    y={top}
+                    width="6"
+                    height={Math.max(1.5, bottom - top)}
+                    rx="1"
+                    fill="currentColor"
+                  />
+                </g>
+              );
+            })}
+
+            {currentPrice != null && (
+              <g>
+                <line
+                  x1="0"
+                  x2={width}
+                  y1={y(currentPrice)}
+                  y2={y(currentPrice)}
+                  stroke="#ffffff"
+                  strokeWidth="1"
+                  strokeDasharray="3 2"
+                />
+              </g>
+            )}
+
+            {entryPrice != null && (
+              <g>
+                <line
+                  x1="0"
+                  x2={width}
+                  y1={y(entryPrice)}
+                  y2={y(entryPrice)}
+                  stroke="#65b8ff"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 3"
+                />
+                <text
+                  x="4"
+                  y={Math.max(8, y(entryPrice) - 3)}
+                  fill="#65b8ff"
+                  fontSize="5"
+                >
+                  ENTRY
+                </text>
+              </g>
+            )}
+
+            {targetPrice != null && (
+              <g>
+                <line
+                  x1="0"
+                  x2={width}
+                  y1={y(targetPrice)}
+                  y2={y(targetPrice)}
+                  stroke="#d8b66d"
+                  strokeWidth="1.5"
+                  strokeDasharray="5 3"
+                />
+                <text
+                  x="4"
+                  y={Math.max(8, y(targetPrice) - 3)}
+                  fill="#d8b66d"
+                  fontSize="5"
+                >
+                  TARGET
+                </text>
+              </g>
+            )}
+
+            {progress > 0 && (
+              <line
+                x1="0"
+                x2={width}
+                y1={35 + (progress % 18)}
+                y2={35 + (progress % 18)}
+                stroke="#d6b56d"
+                strokeDasharray="4 3"
+                opacity=".8"
+              />
+            )}
+          </svg>
+        </div>
+
+        {/* Right-side price scale */}
+        <div style={{
+          width: 68,
+          minWidth: 68,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '8px 5px',
+          borderLeft: '1px solid #383126',
+          background: '#11100d',
+          boxSizing: 'border-box'
+        }}>
+          {priceLabels.map((value, i) => (
+            <span
+              key={i}
+              style={{
+                color: '#c5b990',
+                fontSize: 10,
+                textAlign: 'right',
+                whiteSpace: 'nowrap',
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {value.toFixed(2)}
+            </span>
+          ))}
+        </div>
+
+      </div>
+
+      <div className="chart-labels">
+        <span>3 hours ago</span>
+        <span>
+          {isSimulatedGold
+            ? 'XAUUSD/Gold'
+            : 'Live'}
+        </span>
+        <span>Now</span>
+      </div>
+    </div>
+  );
 }
 
 const languageOptions = [
@@ -110,6 +366,102 @@ const uiTranslations = {
   ru: { Home: 'Главная', Trade: 'Торговля', Deposit: 'Пополнить', Withdraw: 'Вывести', Profile: 'Профиль', 'Sign in': 'Войти', Register: 'Регистрация', 'Install App': 'Установить приложение', 'Email or phone': 'Электронная почта или телефон', 'Full name': 'Полное имя', Password: 'Пароль', 'Confirm password': 'Подтвердите пароль', 'Create account': 'Создать аккаунт', Continue: 'Продолжить', 'Select language': 'Выбрать язык', 'Phone number': 'Номер телефона', 'Country code': 'Код страны', 'Available funds': 'Доступный баланс', 'Account balance': 'Баланс аккаунта', 'Deposit request': 'Заявка на пополнение', Trades: 'Сделки', Deposits: 'Пополнения', Withdrawals: 'Выводы' },
   tr: { Home: 'Ana sayfa', Trade: 'İşlem', Deposit: 'Para yatır', Withdraw: 'Para çek', Profile: 'Profil', 'Sign in': 'Giriş yap', Register: 'Kayıt ol', 'Install App': 'Uygulamayı yükle', 'Email or phone': 'E-posta veya telefon', 'Full name': 'Ad soyad', Password: 'Şifre', 'Confirm password': 'Şifreyi onayla', 'Create account': 'Hesap oluştur', Continue: 'Devam et', 'Select language': 'Dil seçin', 'Phone number': 'Telefon numarası', 'Country code': 'Ülke kodu', 'Available funds': 'Kullanılabilir bakiye', 'Account balance': 'Hesap bakiyesi', 'Deposit request': 'Para yatırma talebi', Trades: 'İşlemler', Deposits: 'Para yatırma', Withdrawals: 'Para çekme' }
 }
+
+
+function MarketIcon({ symbol }) {
+  const key = String(symbol || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+
+  const icons = {
+    BTC: <SiBitcoin />,
+    ETH: <SiEthereum />,
+    SOL: <SiSolana />,
+    AAPL: <SiApple />,
+    NVDA: <SiNvidia />,
+    TSLA: <SiTesla />
+  };
+
+  const colors = {
+    BTC: '#F7931A',
+    ETH: '#8A92B2',
+    SOL: '#9945FF',
+    AAPL: '#FFFFFF',
+    NVDA: '#76B900',
+    TSLA: '#E82127'
+  };
+
+  // Gold
+  if (key === 'XAU' || key === 'XAUUSD') {
+    return (
+      <div className="market-icon gold-icon">
+        <svg viewBox="0 0 64 64" fill="none">
+          <path d="M8 43L22 29L35 43L22 56Z" fill="#D99A16"/>
+          <path d="M22 29L35 43L22 56Z" fill="#F5BD32"/>
+          <path d="M28 27L43 12L58 27L43 42Z" fill="#E9AC19"/>
+          <path d="M43 12L58 27L43 42Z" fill="#FFD85A"/>
+          <path d="M25 44L39 30L53 44L39 58Z" fill="#C88A0A"/>
+        </svg>
+      </div>
+    );
+  }
+
+  // Forex currency pairs
+  const forex = {
+    GBPUSD: { flags: ['🇬🇧', '🇺🇸'], color: '#D4AF37' },
+    EURUSD: { flags: ['🇪🇺', '🇺🇸'], color: '#D4AF37' },
+    USDJPY: { flags: ['🇺🇸', '🇯🇵'], color: '#D4AF37' }
+  };
+
+  if (forex[key]) {
+    return (
+      <div className="market-icon forex-icon">
+        <span>{forex[key].flags[0]}</span>
+        <span>{forex[key].flags[1]}</span>
+      </div>
+    );
+  }
+
+  // Stock indices
+  const indices = {
+    SPX: { label: '500', color: '#38BDF8' },
+    NDX: { label: '100', color: '#A78BFA' },
+    DAX: { label: 'DAX', color: '#F5C542' },
+    DJI: { label: 'DJI', color: '#34D399' }
+  };
+
+  if (indices[key]) {
+    return (
+      <div
+        className="market-icon index-icon"
+        style={{ color: indices[key].color }}
+      >
+        <svg viewBox="0 0 64 64" fill="none">
+          <rect x="7" y="7" width="50" height="50" rx="12"
+            stroke="currentColor" strokeWidth="3"/>
+          <path d="M15 42L25 31L34 37L49 19"
+            stroke="currentColor" strokeWidth="4"
+            strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M40 19H49V28"
+            stroke="currentColor" strokeWidth="3"
+            strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        <small>{indices[key].label}</small>
+      </div>
+    );
+  }
+
+  // Existing crypto and stock icons
+  return (
+    <div
+      className="market-icon"
+      style={{ color: colors[key] || '#D4AF37' }}
+    >
+      {icons[key] || '◆'}
+    </div>
+  );
+}
+
 
 function App() {
   const [language, setLanguage] = useState(() => { try { return localStorage.getItem('igtrade-language') || 'en' } catch { return 'en' } })
@@ -598,7 +950,6 @@ const refreshAccount = async () => {
     connectCrypto()
 
         const providerSymbols = {
-      XAU: 'XAU/USD',
       AAPL: 'AAPL',
       NVDA: 'NVDA',
       TSLA: 'TSLA',
@@ -677,8 +1028,8 @@ return () => {
   // WebSocket ticks update candles afterward; no sample candles/prices are generated.
   useEffect(() => {
     const market = marketDefinitions.find(m => m.symbol === selected)
-    if (!market || market.kind === 'Crypto') return
-    const providerSymbols = { XAU: 'XAU/USD', AAPL: 'AAPL', NVDA: 'NVDA', TSLA: 'TSLA', GBPUSD: 'GBP/USD', EURUSD: 'EUR/USD', USDJPY: 'USD/JPY', SPX: 'SPX', NDX: 'NDX', DAX: 'DAX', DJI: 'DJI' }
+    if (!market || market.kind === 'Crypto' || market.symbol === 'XAU') return
+    const providerSymbols = { AAPL: 'AAPL', NVDA: 'NVDA', TSLA: 'TSLA', GBPUSD: 'GBP/USD', EURUSD: 'EUR/USD', USDJPY: 'USD/JPY', SPX: 'SPX', NDX: 'NDX', DAX: 'DAX', DJI: 'DJI' }
     const providerSymbol = providerSymbols[market.symbol]
     if (!providerSymbol) return
     const controller = new AbortController()
@@ -726,6 +1077,127 @@ return () => {
   window.addEventListener('beforeinstallprompt', handler);
 
   return () => window.removeEventListener('beforeinstallprompt', handler);
+ 
+}, []);
+ // Gold simulated market: price stays between 3980 and 4095.
+useEffect(() => {
+  const MIN_PRICE = 3980;
+  const MAX_PRICE = 4095;
+  const START_PRICE = 4037.5;
+
+  let price = START_PRICE;
+  let candleOpen = START_PRICE;
+  let candleHigh = START_PRICE;
+  let candleLow = START_PRICE;
+  let candleTime = Math.floor(Date.now() / 30000) * 30000;
+  let sessionStart = START_PRICE;
+
+  const initialCandles = Array.from({ length: 40 }, (_, i) => {
+    const base = START_PRICE + (Math.random() - 0.5) * 12;
+    const open = Math.max(MIN_PRICE, Math.min(MAX_PRICE, base));
+    const close = Math.max(
+      MIN_PRICE,
+      Math.min(MAX_PRICE, open + (Math.random() - 0.5) * 5)
+    );
+
+    return {
+      time: candleTime - (39 - i) * 30000,
+      open,
+      high: Math.max(open, close) + Math.random() * 1.5,
+      low: Math.min(open, close) - Math.random() * 1.5,
+      close,
+      up: close >= open,
+      simulated: true
+    };
+  });
+
+  const lastInitial = initialCandles[initialCandles.length - 1];
+  price = lastInitial.close;
+  candleOpen = price;
+  candleHigh = price;
+  candleLow = price;
+
+  setLivePrices(prev => ({
+    ...prev,
+    XAU: {
+      price,
+      change: 0,
+      sessionStartPrice: sessionStart,
+      updatedAt: Date.now(),
+      source: 'Simulated Gold Market'
+    }
+  }));
+
+  setLiveCandles(prev => ({
+    ...prev,
+    XAU: initialCandles
+  }));
+
+  setMarketConnection(prev => ({
+    ...prev,
+    gold: 'simulated'
+  }));
+
+  const timer = setInterval(() => {
+    const now = Date.now();
+    const movement = (Math.random() - 0.49) * 1.8;
+
+    price = Math.max(
+      MIN_PRICE,
+      Math.min(MAX_PRICE, price + movement)
+    );
+
+    const nextCandleTime = Math.floor(now / 30000) * 30000;
+
+    if (nextCandleTime !== candleTime) {
+      candleTime = nextCandleTime;
+      candleOpen = price;
+      candleHigh = price;
+      candleLow = price;
+    } else {
+      candleHigh = Math.max(candleHigh, price);
+      candleLow = Math.min(candleLow, price);
+    }
+
+    const candle = {
+      time: candleTime,
+      open: candleOpen,
+      high: candleHigh,
+      low: candleLow,
+      close: price,
+      up: price >= candleOpen,
+      simulated: true
+    };
+
+    setLivePrices(prev => ({
+      ...prev,
+      XAU: {
+        ...prev.XAU,
+        price,
+        change: ((price - sessionStart) / sessionStart) * 100,
+        updatedAt: now,
+        source: 'Simulated Gold Market'
+      }
+    }));
+
+    setLiveCandles(prev => {
+      const next = [...(prev.XAU || [])];
+      const last = next[next.length - 1];
+
+      if (last?.time === candle.time) {
+        next[next.length - 1] = candle;
+      } else {
+        next.push(candle);
+      }
+
+      return {
+        ...prev,
+        XAU: next.slice(-60)
+      };
+    });
+  }, 1000);
+
+  return () => clearInterval(timer);
 }, []);
   const installApp = async () => {
     if (installPrompt) { installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null) }
@@ -1324,13 +1796,43 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
           <div className="welcome-row"><div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade smarter with confidence.</h1><p className="hero-subtitle">Trade CFDs with the world’s No.1 provider1</p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div><div className="balance-card"><div className="balance-title"><span className="wallet-icon">＄</span><span>USDT balance</span></div><div className="balance-number">{money(balance)} <span>USDT</span></div><div className="balance-footer"><span className="positive">● Available funds</span><button className="text-button" onClick={() => setPage('Profile')}>View wallet ↗</button></div></div></div>
           <div className="ticker-wrap"><div className="ticker-track">{[...markets, ...markets].map((m, i) => <div className="ticker-item" key={`${m.symbol}-${i}`}><strong>{m.name}</strong><span>{quotePrice(m.price, m.symbol)}</span><small className={m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</small></div>)}</div></div>
           <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2><p className="muted">Market crypto {marketConnection.crypto}; stocks, forex, indices and gold {marketConnection.other}.Explore diversified tools to advance your trading strategy and get direct order execution from charts.</p><p className="muted">Crypto {marketConnection.crypto}. Stocks/Gold {marketConnection.other}.IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
-          <div className="market-grid">{filterMarkets.map(m => <button key={m.symbol} className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`} onClick={() => { setSelected(m.symbol); setPage('Trade') }}><div className="coin-row"><span className={`coin coin-${m.symbol}`}>{m.symbol.slice(0, 1)}</span><span><strong>{m.pair}</strong><small>{m.name}</small></span><span className={`change ${m.change >= 0 ? 'positive' : 'negative'}`}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</span></div><div className="market-price">{quotePrice(m.price, m.symbol)}</div><div className="mini-spark"><svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline points={m.change >= 0 ? "0,25 12,20 24,23 38,9 52,15 65,7 78,13 91,4 105,8 120,2" : "0,4 12,8 24,3 38,13 52,9 65,20 78,14 91,23 105,18 120,27"} fill="none" stroke={m.change >= 0 ? '#45d3a1' : '#ff6b73'} strokeWidth="2" /></svg></div></button>)}</div>
+          <div className="market-grid">{filterMarkets.map(m => <button key={m.symbol} className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`} onClick={() => { setSelected(m.symbol); setPage('Trade') }}><div className="coin-row"><MarketIcon symbol={m.symbol} /><span><strong>{m.pair}</strong><small>{m.name}</small></span><span className={`change ${m.change >= 0 ? 'positive' : 'negative'}`}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</span></div><div className="market-price">{quotePrice(m.price, m.symbol)}</div><div className="mini-spark"><svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline points={m.change >= 0 ? "0,25 12,20 24,23 38,9 52,15 65,7 78,13 91,4 105,8 120,2" : "0,4 12,8 24,3 38,13 52,9 65,20 78,14 91,23 105,18 120,27"} fill="none" stroke={m.change >= 0 ? '#45d3a1' : '#ff6b73'} strokeWidth="2" /></svg></div></button>)}</div>
           <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? 'Change since connection unavailable' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}</span></div></div><Candles compact candles={liveCandles[asset.symbol] || []} /></div><div className="panel quick-panel"><span className="eyebrow">QUICK ACTION</span><h2>Ready to trade?</h2><p className="muted">Start a trade with account funds.</p><button className="btn btn-gold btn-full" onClick={() => setPage('Trade')}>Open trading terminal <span>↗</span></button><button className="btn btn-outline btn-full" onClick={() => setPage('Deposit')}>Deposit request <span>＋</span></button><div className="secure-note"><span>✦</span> Account balance.</div></div></div>
           <CustomerService telegramUrl={telegramUrl} />
         </section>}
 
         {page === 'Trade' && <section className="page-section"><div className="page-title-row"><div><div className="eyebrow">Markets To Trades</div><h1><span className="gold-text">Trade</span></h1><p className="muted">Live market</p></div></div>
-          <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select"><span className="coin coin-BTC">{asset.symbol.slice(0, 1)}</span><div><strong>{asset.pair}</strong><small>{asset.name}</small></div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><Candles progress={duration - remaining} candles={liveCandles[asset.symbol] || []} targetPrice={trade && !trade.done ? trade.targetPrice : null} /><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">Live feed · 1-minute candles</span></div>
+          <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select"><MarketIcon symbol={asset.symbol} /><div><strong>{asset.pair}</strong><small>{asset.name}</small></div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">
+  {asset.symbol === 'XAU'
+    ? ''
+    : 'Live'}
+</span>
+</div>
+<Candles
+  progress={duration - remaining}
+  candles={liveCandles[asset.symbol] || []}
+  targetPrice={
+    trade && !trade.done
+      ? trade.targetPrice
+      : null
+  }
+  entryPrice={
+    selected === 'XAU' && trade?.symbol === 'XAU' && !trade.done
+      ? trade.openPrice
+      : null
+  }
+  tradeSecondsLeft={
+    selected === 'XAU' && trade?.symbol === 'XAU' && !trade.done
+      ? remaining
+      : null
+  }
+  tradeDuration={
+    selected === 'XAU' && trade?.symbol === 'XAU'
+      ? trade.duration
+      : 0
+  }
+  currentPrice={asset.symbol === 'XAU' ? asset.price : null}
+/>
             {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div><div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div>
   <small>{!trade.done ? 'EXPECTED RESULT' : trade.profit < 0 ? 'LOSS' : 'PROFIT'}</small>
   <strong className={
