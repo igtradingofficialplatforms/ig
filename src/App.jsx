@@ -532,6 +532,7 @@ function App() {
   const [requests, setRequests] = useState([])
   const [adminOpen, setAdminOpen] = useState(false)
   const [tradeSettingLoaded, setTradeSettingLoaded] = useState(false)
+  const [tradeFullscreen, setTradeFullscreen] = useState(false);
 
 useEffect(() => {
   if (!supabase) {
@@ -1507,8 +1508,10 @@ const startTrade = async () => {
       startCandles: [...(liveCandles[asset.symbol] || [])]
     });
 
-    setRemaining(duration);
-    setToast('Trade started');
+    setTradeFullscreen(true);
+setPage('Trade');
+setRemaining(duration);
+setToast('Trade started');
 
   } catch (error) {
     console.error('Trade start failed:', error);
@@ -1845,9 +1848,22 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
           <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? 'Change since connection unavailable' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}</span></div></div><Candles compact candles={liveCandles[asset.symbol] || []} /></div><div className="panel quick-panel"><span className="eyebrow">QUICK ACTION</span><h2>Ready to trade?</h2><p className="muted">Start a trade with account funds.</p><button className="btn btn-gold btn-full" onClick={() => setPage('Trade')}>Open trading terminal <span>↗</span></button><button className="btn btn-outline btn-full" onClick={() => setPage('Deposit')}>Deposit request <span>＋</span></button><div className="secure-note"><span>✦</span> Account balance.</div></div></div>
           <CustomerService telegramUrl={telegramUrl} />
         </section>}
+        {page === 'Trade' && <section className={`page-section ${tradeFullscreen ? 'trade-fullscreen' : ''}`}>
 
-        {page === 'Trade' && <section className="page-section"><div className="page-title-row"><div><div className="eyebrow">Markets To Trades</div><h1><span className="gold-text">Trade</span></h1><p className="muted">Live market</p></div></div>
-          <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select"><MarketIcon symbol={asset.symbol} /><div><strong>{asset.pair}</strong><small>{asset.name}</small></div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">
+  {tradeFullscreen && (
+    <div className="page-title-row">
+      <button
+        className="btn btn-outline"
+        onClick={() => {
+          setTradeFullscreen(false);
+          setPage('Home');
+        }}
+      >
+        Back to Home
+      </button>
+    </div>
+  )}
+        <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select"><MarketIcon symbol={asset.symbol} /><div><strong>{asset.pair}</strong><small>{asset.name}</small></div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">
   {asset.symbol === 'XAU'
     ? ''
     : 'Live'}
@@ -1878,7 +1894,7 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
   }
   currentPrice={asset.symbol === 'XAU' ? asset.price : null}
 />
-            {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div><div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div>
+            {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">Remaining:{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div><div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Duration</small><strong>{trade.duration}s</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div>
   <small>{!trade.done ? 'EXPECTED RESULT' : trade.profit < 0 ? 'LOSS' : 'PROFIT'}</small>
   <strong className={
     trade.done
@@ -1891,7 +1907,8 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
     }
   </strong>
 </div><div><small>rate</small><strong className="gold-text">{Math.round(trade.virtualRate * 100)}%</strong></div></div><div className="trade-timestamps"><span>Opened: {trade.openTime || trade.startedAt}</span><span>{trade.closeTime ? `Closed: ${trade.closeTime}` : trade.awaitingDone ? 'Timer complete — press Done to record this trade.' : 'Waiting for timer to finish.'}</span></div><Candles compact candles={trade.done || trade.awaitingDone ? (trade.endCandles || liveCandles[trade.symbol] || []) : (liveCandles[trade.symbol] || trade.startCandles || [])} targetPrice={trade.targetPrice} />{trade.awaitingDone && <button className="btn btn-gold btn-full" onClick={finishTrade}>Done — save trade to history</button>}{trade.done && <><p className="result-message">Saved to Profile → Trades with opening price, target price, closing price and chart snapshot.</p><button className="btn btn-gold" onClick={() => { setTrade(null); setRemaining(0) }}>Start another trade</button></>}</div>}
-          </div><div className="panel trade-controls"><div className="control-head"><h2>Place trade</h2><span className="tiny-tag">IG</span></div><div className="label-row"><label>Direction</label></div><div className="direction-row"><button className={`direction buy ${direction === 'BUY' ? 'direction-active' : ''}`} onClick={() => setDirection('BUY')}>↗ BUY</button><button className={`direction sell ${direction === 'SELL' ? 'direction-active' : ''}`} onClick={() => setDirection('SELL')}>↘ SELL</button></div><label className="field-label">Trade duration</label><div className="duration-options">{[30, 60, 120].map(d => <button key={d} className={duration === d ? 'duration-active' : ''} onClick={() => { setDuration(d); setAmount(d === 30 ? '100' : d === 60 ? '12000' : '35000') }}><strong>{d}s</strong><small>{d === 30 ? '20% rate' : d === 60 ? '40% rate' : '80% rate'}</small></button>)}</div><label className="field-label" htmlFor="amount">Amount (USDT)</label><div className="amount-input"><span>$</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="amount-hint">{duration === 30 ? 'Amount range: $20 – $10,000' : duration === 60 ? '$12,000 – $30,000' : '$35,000 – $99,000'} · Account balance: {money(balance)}</div><div className="estimate-box"><div><span>Illustrative result if completed</span><strong className="positive">+{money(Number(amount || 0) * (duration === 30 ? .2 : duration === 60 ? .4 : .8))}</strong></div><small>Profit/loss.</small></div><button className="btn btn-gold btn-full btn-large"disabled={tradeStarting || !!(trade && !trade.done)} onClick={startTrade}>{tradeStarting ? 'Saving trade...' : !tradeEnabled ? 'Trading' : trade && !trade.done ? `Trade running · ${remaining}s` : 'Start trade'} <span>↗</span></button><p className="fine-print">IG trading platforms</p></div></div>
+          </div><div className="panel trade-controls"><div className="control-head"><h2>Place trade</h2><span className="tiny-tag">IG</span></div><div className="label-row"><label>Direction</label></div><div className="direction-row"><button className={`direction buy ${direction === 'BUY' ? 'direction-active' : ''}`} onClick={() => setDirection('BUY')}>↗ BUY</button><button className={`direction sell ${direction === 'SELL' ? 'direction-active' : ''}`} onClick={() => setDirection('SELL')}>↘ SELL</button></div><label className="field-label">Trade duration</label><div className="duration-options">{[30, 60, 120].map(d => <button key={d} className={duration === d ? 'duration-active' : ''} onClick={() => { setDuration(d); setAmount(d === 30 ? '100' : d === 60 ? '12000' : '35000') }}><strong>{d}s</strong><small>{d === 30 ? '20% rate' : d === 60 ? '40% rate' : '80% rate'}</small></button>)}</div><label className="field-label" htmlFor="amount">Amount (USDT)</label><div className="amount-input"><span>$</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="amount-hint">{duration === 30 ? 'Amount range: $20 – $10,000' : duration === 60 ? '$12,000 – $30,000' : '$35,000 – $99,000'} · Account balance: {money(balance)}</div><div className="estimate-box"><div><span>Illustrative result if completed</span><strong className="positive">+{money(Number(amount || 0) * (duration === 30 ? .2 : duration === 60 ? .4 : .8))}</strong></div><small>Profit/loss.</small></div><button className="btn btn-gold btn-full btn-large"disabled={tradeStarting || !!(trade && !trade.done)}onClick={startTrade}
+>{tradeStarting ? 'Saving trade...' : !tradeEnabled ? 'Trading' : trade && !trade.done ? `Trade running · ${remaining}s` : 'Start trade'} <span>↗</span></button><p className="fine-print">IG trading platforms</p></div></div>
         </section>}
 
         {page === 'Deposit' && <section className="page-section narrow-page"><div className="eyebrow">WALLET SERVICES</div><h1>Deposit <span className="gold-text">request</span></h1><p className="muted">Submit a request for review</p><div className="panel form-panel"><form onSubmit={submitDeposit}><label className="field-label">Select network</label><div className="network-options">{['TRC20', 'BTC', 'ETH'].map(n => <button type="button" key={n} className={depositMethod === n ? 'network-active' : ''} onClick={() => setDepositMethod(n)}><span className="network-symbol">{n === 'TRC20' ? '₮' : n === 'BTC' ? '₿' : '◆'}</span><strong>{n}</strong><small>{n === 'TRC20' ? 'USDT · Tron' : n === 'BTC' ? 'Bitcoin' : 'Ethereum'}</small></button>)}</div><label className="field-label">Deposit address</label>

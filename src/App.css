@@ -435,3 +435,144 @@ body,
     transform: translateX(0);
   }
 }
+/* Fullscreen Trade Mode */
+.trade-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 99999 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 24px !important;
+  overflow-y: auto !important;
+  background: #0b0b0d !important;
+}
+
+.trade-fullscreen .trade-layout {
+  width: 100%;
+  max-width: none;
+}
+
+.trade-fullscreen .trade-controls {
+  position: static;
+}
+
+@media (max-width: 800px) {
+  .trade-fullscreen {
+    padding: 12px !important;
+  }
+}
+@media (max-width: 800px) {
+  .trade-fullscreen {
+    height: 100dvh !important;
+    padding: 12px !important;
+    overflow-y: auto !important;
+  }
+
+  .trade-fullscreen .trade-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px;
+  }
+
+  .trade-fullscreen .trade-chart-panel {
+    order: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .trade-fullscreen .trade-chart-panel .trade-result {
+    order: -1 !important;
+    margin-top: 0 !important;
+    margin-bottom: 14px !important;
+  }
+
+  .trade-fullscreen .trade-controls {
+    order: 2 !important;
+    position: static !important;
+    width: 100% !important;
+  }
+}
+/* Compact Mobile Trade Screen */
+@media (max-width: 800px) {
+  .trade-fullscreen {
+    height: 100dvh !important;
+    padding: 8px !important;
+    overflow-y: auto !important;
+  }
+
+  .trade-fullscreen .trade-layout {
+    gap: 6px !important;
+  }
+
+  .trade-fullscreen .trade-result {
+    padding: 8px !important;
+    margin: 0 0 6px !important;
+  }
+
+  .trade-fullscreen .result-grid {
+    gap: 5px 8px !important;
+    margin-top: 7px !important;
+  }
+
+  .trade-fullscreen .trade-timestamps {
+    margin: 6px 0 !important;
+    gap: 3px !important;
+  }
+
+  .trade-fullscreen .trade-controls {
+    padding: 10px !important;
+  }
+
+  .trade-fullscreen .control-head {
+    margin-bottom: 8px !important;
+  }
+
+  .trade-fullscreen .field-label {
+    margin: 9px 0 5px !important;
+  }
+
+  .trade-fullscreen .duration-options {
+    gap: 5px !important;
+  }
+
+  .trade-fullscreen .duration-options button {
+    min-height: 38px !important;
+    padding: 4px !important;
+  }
+
+  .trade-fullscreen .duration-options button strong {
+    font-size: 13px !important;
+  }
+
+  .trade-fullscreen .duration-options button small {
+    font-size: 9px !important;
+    margin-top: 2px !important;
+  }
+
+  .trade-fullscreen .direction {
+    padding: 8px !important;
+  }
+
+  .trade-fullscreen .amount-input input {
+    padding: 8px 0 !important;
+  }
+
+  .trade-fullscreen .estimate-box {
+    margin: 8px 0 !important;
+    padding: 8px !important;
+  }
+
+  .trade-fullscreen .btn-large {
+    min-height: 40px !important;
+    padding: 8px !important;
+  }
+
+  .trade-fullscreen .fine-print {
+    margin-top: 5px !important;
+  }
+}
