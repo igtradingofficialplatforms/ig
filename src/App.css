@@ -576,3 +576,169 @@ body,
     margin-top: 5px !important;
   }
 }
+
+/* IGTrade - Smaller Mobile Trade Duration Box */
+@media screen and (max-width: 800px) {
+
+  .trade-fullscreen {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    padding: 8px !important;
+    overflow-y: auto !important;
+  }
+
+  .trade-fullscreen .trade-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    align-items: center !important;
+  }
+
+  /* Compact Duration and Profit Box */
+  .trade-fullscreen .trade-controls {
+    order: -1 !important;
+    width: 100% !important;
+    max-width: 460px !important;
+    padding: 10px 12px !important;
+    margin: 0 auto !important;
+    position: relative !important;
+    border-radius: 10px !important;
+  }
+
+  .trade-fullscreen .control-head {
+    margin-bottom: 5px !important;
+  }
+
+  .trade-fullscreen .field-label {
+    margin: 7px 0 4px !important;
+    font-size: 10px !important;
+  }
+
+  .trade-fullscreen .direction-row {
+    gap: 5px !important;
+  }
+
+  .trade-fullscreen .direction {
+    padding: 7px !important;
+    font-size: 11px !important;
+  }
+
+  .trade-fullscreen .duration-options {
+    gap: 5px !important;
+  }
+
+  .trade-fullscreen .duration-options button {
+    min-height: 34px !important;
+    padding: 3px !important;
+  }
+
+  .trade-fullscreen .duration-options button strong {
+    font-size: 12px !important;
+  }
+
+  .trade-fullscreen .duration-options button small {
+    font-size: 8px !important;
+    margin-top: 1px !important;
+  }
+
+  .trade-fullscreen .amount-input input {
+    padding: 7px 0 !important;
+  }
+
+  .trade-fullscreen .estimate-box {
+    margin: 6px 0 !important;
+    padding: 7px 9px !important;
+  }
+
+  .trade-fullscreen .estimate-box small {
+    margin-top: 4px !important;
+  }
+
+  .trade-fullscreen .btn-large {
+    min-height: 36px !important;
+    padding: 7px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .trade-fullscreen .fine-print {
+    margin: 4px 0 0 !important;
+    font-size: 9px !important;
+  }
+
+  /* Compact Trade Result */
+  .trade-fullscreen .trade-result {
+    padding: 9px !important;
+    margin: 0 0 5px !important;
+  }
+
+  .trade-fullscreen .result-grid {
+    gap: 6px !important;
+    margin-top: 7px !important;
+  }
+
+  .trade-fullscreen .result-grid strong {
+    font-size: 11px !important;
+  }
+
+  .trade-fullscreen .countdown {
+    font-size: 18px !important;
+  }
+
+  .trade-fullscreen .trade-timestamps {
+    margin: 5px 0 !important;
+    gap: 3px !important;
+  }
+
+  .trade-fullscreen .trade-chart-panel {
+    width: 100% !important;
+  }
+}
+@media screen and (max-width: 800px) {
+  .trade-fullscreen .page-title-row {
+    margin: 0 0 4px !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .trade-fullscreen .trade-layout {
+    margin-top: 0 !important;
+    gap: 8px !important;
+  }
+}
+@media screen and (max-width: 800px) {
+  .trade-fullscreen {
+    padding-top: 2px !important;
+  }
+
+  .trade-fullscreen .page-title-row {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    line-height: 1 !important;
+  }
+
+  .trade-fullscreen .trade-layout {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    row-gap: 4px !important;
+  }
+}
+@media screen and (max-width: 800px) {
+  .trade-fullscreen .trade-layout {
+    gap: 14px !important;
+  }
+
+  .trade-fullscreen .trade-chart-panel {
+    margin-top: 10px !important;
+  }
+}
+@media screen and (max-width: 800px) {
+  .trade-fullscreen .page-title-row {
+    margin-bottom: -8px !important;
+    padding-bottom: 0 !important;
+  }
+
+  .trade-fullscreen .trade-layout {
+    margin-top: 0 !important;
+  }
+}

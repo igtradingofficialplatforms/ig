@@ -121,28 +121,31 @@ function Candles({
   entryPrice = null,
   tradeSecondsLeft = null,
   tradeDuration = 0,
-  currentPrice = null
+  currentPrice = null,
+  timeframe = '1m',
+  onTimeframeChange = () => {}
 }) {
-  const width = Math.max(1, candles.length) * 12;
+  const [selectedCandle, setSelectedCandle] = useState(null)
+
+  const width = Math.max(1, candles.length) * 12
 
   const values = [
     ...candles.flatMap(c => [c.high, c.low]),
     ...(targetPrice == null ? [] : [targetPrice]),
     ...(entryPrice == null ? [] : [entryPrice]),
     ...(currentPrice == null ? [] : [currentPrice])
-  ].filter(Number.isFinite);
+  ].filter(v => Number.isFinite(Number(v)))
 
-  const rawMax = values.length ? Math.max(...values) : 1;
-  const rawMin = values.length ? Math.min(...values) : 0;
-  const padding = Math.max((rawMax - rawMin) * 0.08, 0.01);
+  const rawMax = values.length ? Math.max(...values) : 1
+  const rawMin = values.length ? Math.min(...values) : 0
+  const padding = Math.max((rawMax - rawMin) * 0.08, 0.01)
+  const max = rawMax + padding
+  const min = rawMin - padding
+  const span = Math.max(max - min, 0.000001)
 
-  const max = rawMax + padding;
-  const min = rawMin - padding;
-  const span = Math.max(max - min, 0.000001);
+  const y = value => 94 - ((Number(value) - min) / span) * 82
 
-  const y = value => 94 - ((value - min) / span) * 82;
-
-  const isSimulatedGold = candles.some(c => c.simulated);
+  const isSimulatedGold = candles.some(c => c.simulated)
 
   const elapsedPercent =
     tradeDuration > 0 && tradeSecondsLeft != null
@@ -153,32 +156,108 @@ function Candles({
             ((tradeDuration - tradeSecondsLeft) / tradeDuration) * 100
           )
         )
-      : 0;
+      : 0
 
   const timerText =
     tradeSecondsLeft == null
       ? ''
-      : `${String(Math.floor(tradeSecondsLeft / 60)).padStart(2, '0')}:${String(tradeSecondsLeft % 60).padStart(2, '0')}`;
+      : `${String(Math.floor(tradeSecondsLeft / 60)).padStart(2, '0')}:${String(tradeSecondsLeft % 60).padStart(2, '0')}`
 
   const priceLabels = Array.from(
     { length: 5 },
     (_, i) => max - (span * i / 4)
-  );
+  )
+
+  const formatPrice = value => {
+    const digits = Number(value) < 1 ? 5 : 2
+    return Number(value).toLocaleString('en-US', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
+    })
+  }
+
+  const formatCandleTime = value => {
+    if (!value) return 'Time unavailable'
+
+    const date = new Date(Number(value))
+
+    if (Number.isNaN(date.getTime())) return 'Time unavailable'
+
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  }
 
   if (!candles.length) {
     return (
       <div className={`chart ${compact ? 'chart-compact' : ''} chart-empty`}>
         <div className="empty-state">
           <strong>Waiting for candle data</strong>
-          <p>Loadind..</p>
+          <p>Loading market data...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
     <div className={`chart ${compact ? 'chart-compact' : ''}`}>
 
+      {/* Chart timeframe controls */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 5,
+        padding: '9px 10px',
+        background: '#11100d',
+        borderBottom: '1px solid #383126',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{
+          display: 'flex',
+          gap: 5,
+          flexWrap: 'wrap'
+        }}>
+          {['1m', '5m', '15m', '30m', '1h'].map(item => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => {
+                onTimeframeChange(item)
+                setSelectedCandle(null)
+              }}
+              style={{
+                border: '1px solid',
+                borderColor: timeframe === item ? '#d8b66d' : '#383126',
+                background: timeframe === item ? '#3a2d16' : '#191713',
+                color: timeframe === item ? '#f5d58a' : '#aaa08a',
+                borderRadius: 5,
+                padding: '5px 9px',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+
+        <span style={{
+          color: isSimulatedGold ? '#e4bd69' : '#70c99a',
+          fontSize: 10,
+          fontWeight: 700
+        }}>
+          {isSimulatedGold ? '' : 'MARKET DATA'}
+        </span>
+      </div>
+
+      {/* Trade timer */}
       {tradeSecondsLeft != null && tradeDuration > 0 && (
         <div style={{
           padding: '10px 12px',
@@ -196,7 +275,7 @@ function Candles({
               fontSize: 11,
               fontWeight: 700
             }}>
-              GOLD TRADE · {tradeSecondsLeft === 0 ? 'TIME COMPLETE' : 'TIME REMAINING'}
+              TRADE · {tradeSecondsLeft === 0 ? 'TIME COMPLETE' : 'TIME REMAINING'}
             </span>
 
             <strong style={{
@@ -225,12 +304,54 @@ function Candles({
         </div>
       )}
 
+      {/* Selected candle OHLC information */}
+      {selectedCandle && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px 14px',
+          padding: '10px 12px',
+          background: '#17140e',
+          borderBottom: '1px solid #383126',
+          fontSize: 11
+        }}>
+          <div style={{ width: '100%', color: '#d8b66d' }}>
+            {formatCandleTime(selectedCandle.time)}
+          </div>
+
+          <span style={{ color: '#aaa08a' }}>
+            O: <strong style={{ color: '#fff' }}>
+              {formatPrice(selectedCandle.open)}
+            </strong>
+          </span>
+
+          <span style={{ color: '#aaa08a' }}>
+            H: <strong style={{ color: '#70c99a' }}>
+              {formatPrice(selectedCandle.high)}
+            </strong>
+          </span>
+
+          <span style={{ color: '#aaa08a' }}>
+            L: <strong style={{ color: '#ef7777' }}>
+              {formatPrice(selectedCandle.low)}
+            </strong>
+          </span>
+
+          <span style={{ color: '#aaa08a' }}>
+            C: <strong style={{ color: '#fff' }}>
+              {formatPrice(selectedCandle.close)}
+            </strong>
+          </span>
+        </div>
+      )}
+
       <div style={{
         display: 'flex',
         width: '100%',
         minWidth: 0
       }}>
 
+        {/* Candlestick chart */}
         <div style={{
           flex: 1,
           minWidth: 0,
@@ -244,20 +365,38 @@ function Candles({
             viewBox={`0 0 ${width} 100`}
             preserveAspectRatio="none"
             role="img"
-            aria-label="Market candlestick chart"
+            aria-label="Interactive market candlestick chart"
             style={{
               display: 'block',
               width: '100%',
-              height: compact ? 110 : 260
+              height: compact ? 110 : 260,
+              touchAction: 'pan-y'
             }}
           >
             {candles.map((c, i) => {
-              const x = i * 12 + 3;
-              const top = y(Math.max(c.open, c.close));
-              const bottom = y(Math.min(c.open, c.close));
+              const x = i * 12 + 3
+              const top = y(Math.max(c.open, c.close))
+              const bottom = y(Math.min(c.open, c.close))
+              const selected = selectedCandle?.time === c.time
 
               return (
-                <g key={c.time} className={c.up ? 'candle-up' : 'candle-down'}>
+                <g
+                  key={c.time}
+                  className={c.up ? 'candle-up' : 'candle-down'}
+                  onClick={() => setSelectedCandle(c)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {selected && (
+                    <rect
+                      x={x - 2}
+                      y="1"
+                      width="10"
+                      height="98"
+                      fill="#d8b66d"
+                      opacity=".10"
+                    />
+                  )}
+
                   <line
                     x1={x + 3}
                     x2={x + 3}
@@ -266,6 +405,7 @@ function Candles({
                     stroke="currentColor"
                     strokeWidth="1.2"
                   />
+
                   <rect
                     x={x}
                     y={top}
@@ -274,22 +414,28 @@ function Candles({
                     rx="1"
                     fill="currentColor"
                   />
+
+                  <rect
+                    x={x - 2}
+                    y={Math.min(y(c.high), top) - 2}
+                    width="10"
+                    height={Math.max(8, Math.abs(y(c.low) - y(c.high)) + 4)}
+                    fill="transparent"
+                  />
                 </g>
-              );
+              )
             })}
 
             {currentPrice != null && (
-              <g>
-                <line
-                  x1="0"
-                  x2={width}
-                  y1={y(currentPrice)}
-                  y2={y(currentPrice)}
-                  stroke="#ffffff"
-                  strokeWidth="1"
-                  strokeDasharray="3 2"
-                />
-              </g>
+              <line
+                x1="0"
+                x2={width}
+                y1={y(currentPrice)}
+                y2={y(currentPrice)}
+                stroke="#ffffff"
+                strokeWidth="1"
+                strokeDasharray="3 2"
+              />
             )}
 
             {entryPrice != null && (
@@ -373,26 +519,34 @@ function Candles({
                 fontVariantNumeric: 'tabular-nums'
               }}
             >
-              {value.toFixed(2)}
+              {formatPrice(value)}
             </span>
           ))}
-        </div>
 
+          {currentPrice != null && (
+            <strong style={{
+              color: '#fff',
+              background: '#287b55',
+              padding: '4px 2px',
+              borderRadius: 3,
+              textAlign: 'center',
+              fontSize: 10,
+              fontVariantNumeric: 'tabular-nums'
+            }}>
+              {formatPrice(currentPrice)}
+            </strong>
+          )}
+        </div>
       </div>
 
       <div className="chart-labels">
-        <span>3 hours ago</span>
-        <span>
-          {isSimulatedGold
-            ? 'XAUUSD/Gold'
-            : 'Live'}
-        </span>
+        <span>{formatCandleTime(candles[0]?.time)}</span>
+        <span>{isSimulatedGold ? 'XAU/USD · LIVE' : 'MARKET'}</span>
         <span>Now</span>
       </div>
     </div>
-  );
+  )
 }
-
 const languageOptions = [
   ['en', 'English'], ['bn', 'বাংলা'], ['ar', 'العربية'], ['hi', 'हिन्दी'], ['ur', 'اردو'], ['zh', '中文'], ['es', 'Español'], ['fr', 'Français'], ['pt', 'Português'], ['ru', 'Русский'], ['tr', 'Türkçe']
 ]
@@ -692,8 +846,14 @@ const [walletQrCodes, setWalletQrCodes] = useState({
   const [telegramUrl, setTelegramUrl] = useState('https://t.me/igtrading_platforms93')
 
   const [livePrices, setLivePrices] = useState({})
-  const [marketConnection, setMarketConnection] = useState({ crypto: 'connecting', other: import.meta.env.VITE_TWELVEDATA_API_KEY ? 'connecting' : 'API key required' })
   const [liveCandles, setLiveCandles] = useState({})
+  const [marketConnection, setMarketConnection] = useState({ crypto: 'connecting', other: import.meta.env.VITE_TWELVEDATA_API_KEY ? 'connecting' : 'API key required' })
+  const [chartTimeframe, setChartTimeframe] = useState('1m')
+  const chartTimeframeRef = useRef('1m')
+
+useEffect(() => {
+  chartTimeframeRef.current = chartTimeframe
+}, [chartTimeframe])
 
   // Supabase authentication: admin access is granted only by the server-stored profiles.role.
   useEffect(() => {
@@ -1001,7 +1161,7 @@ const refreshAccount = async () => {
           if (d.e === '24hrTicker') {
             const symbol = d.s.replace('USDT', '')
             setLivePrices(prev => ({ ...prev, [symbol]: { price: Number(d.c), change: Number(d.P), updatedAt: Date.now(), source: 'Binance live' } }))
-          } else if (d.e === 'kline') {
+          } else if (d.e === 'kline' && chartTimeframe === '1m') {
             const symbol = d.s.replace('USDT', '')
             const k = d.k
             setLiveCandles(prev => {
@@ -1094,37 +1254,150 @@ return () => {
 }
 }, [])
 
-  // Load actual historical 1-minute candles for the selected non-crypto market.
-  // WebSocket ticks update candles afterward; no sample candles/prices are generated.
-  useEffect(() => {
-    const market = marketDefinitions.find(m => m.symbol === selected)
-    if (!market || market.kind === 'Crypto' || market.symbol === 'XAU') return
-    const providerSymbols = { AAPL: 'AAPL', NVDA: 'NVDA', TSLA: 'TSLA', GBPUSD: 'GBP/USD', EURUSD: 'EUR/USD', USDJPY: 'USD/JPY', SPX: 'SPX', NDX: 'NDX', DAX: 'DAX', DJI: 'DJI' }
-    const providerSymbol = providerSymbols[market.symbol]
-    if (!providerSymbol) return
-    const controller = new AbortController()
-    setMarketConnection(v => ({ ...v, other: 'loading candles' }))
-    const url = new URL('/api/market', window.location.origin)
-    url.searchParams.set('symbol', providerSymbol)
-    url.searchParams.set('type', 'candles')
-    fetch(url.toString(), { signal: controller.signal })
-      .then(async response => { if (!response.ok) throw new Error(`Candle API HTTP ${response.status}`); return response.json() })
-      .then(data => {
-        if (data.status === 'error' || !Array.isArray(data.values)) throw new Error(data.message || 'No candle data returned for this symbol')
-        const candles = data.values.map(v => ({
-          time: Date.parse(v.datetime.replace(' ', 'T') + (v.datetime.includes('Z') ? '' : 'Z')),
-          open: Number(v.open), high: Number(v.high), low: Number(v.low), close: Number(v.close), up: Number(v.close) >= Number(v.open)
-        })).filter(c => Number.isFinite(c.time) && [c.open, c.high, c.low, c.close].every(Number.isFinite))
-        if (candles.length) {
-          setLiveCandles(prev => ({ ...prev, [market.symbol]: candles.slice(-60) }))
-          const last = candles[candles.length - 1]
-          setLivePrices(prev => { const old = prev[market.symbol] || {}; return { ...prev, [market.symbol]: { ...old, price: old.price ?? last.close, updatedAt: old.updatedAt ?? Date.now(), source: old.source || 'Twelve Data candle history' } } })
-          setMarketConnection(v => ({ ...v, other: 'history loaded; waiting for live tick' }))
+  
+  // Load historical candles for the selected market and chart timeframe.
+useEffect(() => {
+  const market = marketDefinitions.find(m => m.symbol === selected)
+
+  if (!market || market.symbol === 'XAU') return
+
+  const controller = new AbortController()
+
+  const loadHistoricalCandles = async () => {
+    try {
+      setMarketConnection(v => ({
+        ...v,
+        [market.kind === 'Crypto' ? 'crypto' : 'other']: 'loading historical candles'
+      }))
+
+      let candles = []
+
+      if (market.kind === 'Crypto') {
+        // Actual Binance historical candles
+        const response = await fetch(
+          `https://api.binance.com/api/v3/klines?symbol=${market.pair}&interval=${chartTimeframe}&limit=500`,
+          { signal: controller.signal }
+        )
+
+        if (!response.ok) {
+          throw new Error(`Binance history HTTP ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        candles = data.map(k => ({
+          time: Number(k[0]),
+          open: Number(k[1]),
+          high: Number(k[2]),
+          low: Number(k[3]),
+          close: Number(k[4]),
+          up: Number(k[4]) >= Number(k[1])
+        }))
+      } else {
+        // Other markets use your existing /api/market backend.
+        const providerSymbols = {
+          AAPL: 'AAPL',
+          NVDA: 'NVDA',
+          TSLA: 'TSLA',
+          GBPUSD: 'GBP/USD',
+          EURUSD: 'EUR/USD',
+          USDJPY: 'USD/JPY',
+          SPX: 'SPX',
+          NDX: 'NDX',
+          DAX: 'DAX',
+          DJI: 'DJI'
+        }
+
+        const providerSymbol = providerSymbols[market.symbol]
+        if (!providerSymbol) return
+
+        const url = new URL('/api/market', window.location.origin)
+        url.searchParams.set('symbol', providerSymbol)
+        url.searchParams.set('type', 'candles')
+        url.searchParams.set('interval', chartTimeframe)
+        url.searchParams.set('outputsize', '500')
+
+        const response = await fetch(url.toString(), {
+          signal: controller.signal
+        })
+
+        if (!response.ok) {
+          throw new Error(`Candle API HTTP ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        if (data.status === 'error' || !Array.isArray(data.values)) {
+          throw new Error(data.message || 'No historical candle data returned')
+        }
+
+        candles = data.values.map(v => ({
+          time: Date.parse(
+            v.datetime.replace(' ', 'T') +
+            (v.datetime.includes('Z') ? '' : 'Z')
+          ),
+          open: Number(v.open),
+          high: Number(v.high),
+          low: Number(v.low),
+          close: Number(v.close),
+          up: Number(v.close) >= Number(v.open)
+        }))
+      }
+
+      if (controller.signal.aborted) return
+
+      candles = candles.filter(c =>
+        Number.isFinite(c.time) &&
+        [c.open, c.high, c.low, c.close].every(Number.isFinite)
+      )
+
+      if (!candles.length) {
+        throw new Error('No valid historical candles found')
+      }
+
+      setLiveCandles(prev => ({
+        ...prev,
+        [market.symbol]: candles
+      }))
+
+      const last = candles[candles.length - 1]
+
+      setLivePrices(prev => {
+        const old = prev[market.symbol] || {}
+
+        return {
+          ...prev,
+          [market.symbol]: {
+            ...old,
+            price: old.price ?? last.close,
+            updatedAt: old.updatedAt ?? Date.now(),
+            source: market.kind === 'Crypto'
+              ? 'Binance historical data'
+              : 'Market historical data'
+          }
         }
       })
-      .catch(error => { if (error.name !== 'AbortError') { console.warn('Twelve Data candle history unavailable:', error.message); setMarketConnection(v => ({ ...v, other: 'candle API unavailable' })) } })
-    return () => controller.abort()
-  }, [selected])
+
+      setMarketConnection(v => ({
+        ...v,
+        [market.kind === 'Crypto' ? 'crypto' : 'other']: 'historical data loaded'
+      }))
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.warn('Historical candle loading failed:', error.message)
+
+        setMarketConnection(v => ({
+          ...v,
+          [market.kind === 'Crypto' ? 'crypto' : 'other']: 'historical data unavailable'
+        }))
+      }
+    }
+  }
+
+  loadHistoricalCandles()
+
+  return () => controller.abort()
+}, [selected, chartTimeframe])
 
   useEffect(() => {
   if ('serviceWorker' in navigator) {
@@ -1867,11 +2140,18 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
   <WithdrawalTicker />
 
   {page === 'Home' && <section className="page-section">
-          <div className="welcome-row"><div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade smarter with confidence.</h1><p className="hero-subtitle">Trade CFDs with the world’s No.1 provider1</p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div><div className="balance-card"><div className="balance-title"><span className="wallet-icon">＄</span><span>USDT balance</span></div><div className="balance-number">{money(balance)} <span>USDT</span></div><div className="balance-footer"><span className="positive">● Available funds</span><button className="text-button" onClick={() => setPage('Profile')}>View wallet ↗</button></div></div></div>
+          <div className="welcome-row"><div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade CFDs with the world’s No.1 provider1.</h1><p className="hero-subtitle"></p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div><div className="balance-card"><div className="balance-title"><span className="wallet-icon">＄</span><span>USDT balance</span></div><div className="balance-number">{money(balance)} <span>USDT</span></div><div className="balance-footer"><span className="positive">● Available funds</span><button className="text-button" onClick={() => setPage('Profile')}>View wallet ↗</button></div></div></div>
           <div className="ticker-wrap"><div className="ticker-track">{[...markets, ...markets].map((m, i) => <div className="ticker-item" key={`${m.symbol}-${i}`}><strong>{m.name}</strong><span>{quotePrice(m.price, m.symbol)}</span><small className={m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</small></div>)}</div></div>
-          <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2><p className="muted">Market crypto {marketConnection.crypto}; stocks, forex, indices and gold {marketConnection.other}.Explore diversified tools to advance your trading strategy and get direct order execution from charts.</p><p className="muted">Crypto {marketConnection.crypto}. Stocks/Gold {marketConnection.other}.IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
+          <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
           <div className="market-grid">{filterMarkets.map(m => <button key={m.symbol} className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`} onClick={() => { setSelected(m.symbol); setPage('Trade') }}><div className="coin-row"><MarketIcon symbol={m.symbol} /><span><strong>{m.pair}</strong><small>{m.name}</small></span><span className={`change ${m.change >= 0 ? 'positive' : 'negative'}`}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</span></div><div className="market-price">{quotePrice(m.price, m.symbol)}</div><div className="mini-spark"><svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline points={m.change >= 0 ? "0,25 12,20 24,23 38,9 52,15 65,7 78,13 91,4 105,8 120,2" : "0,4 12,8 24,3 38,13 52,9 65,20 78,14 91,23 105,18 120,27"} fill="none" stroke={m.change >= 0 ? '#45d3a1' : '#ff6b73'} strokeWidth="2" /></svg></div></button>)}</div>
-          <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? 'Change since connection unavailable' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}</span></div></div><Candles compact candles={liveCandles[asset.symbol] || []} /></div><div className="panel quick-panel"><span className="eyebrow">QUICK ACTION</span><h2>Ready to trade?</h2><p className="muted">Start a trade with account funds.</p><button className="btn btn-gold btn-full" onClick={() => setPage('Trade')}>Open trading terminal <span>↗</span></button><button className="btn btn-outline btn-full" onClick={() => setPage('Deposit')}>Deposit request <span>＋</span></button><div className="secure-note"><span>✦</span> Account balance.</div></div></div>
+          <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? 'Change since connection unavailable' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}</span></div></div><Candles
+  Candles
+  compact
+  candles={liveCandles[asset.symbol] || []}
+  currentPrice={asset.price}
+  timeframe={chartTimeframe}
+  onTimeframeChange={setChartTimeframe}
+/></div><div className="panel quick-panel"><span className="eyebrow">QUICK ACTION</span><h2>Ready to trade?</h2><p className="muted">Start a trade with account funds.</p><button className="btn btn-gold btn-full" onClick={() => setPage('Trade')}>Open trading terminal <span>↗</span></button><button className="btn btn-outline btn-full" onClick={() => setPage('Deposit')}>Deposit request <span>＋</span></button><div className="secure-note"><span>✦</span> Account balance.</div></div></div>
           <CustomerService telegramUrl={telegramUrl} />
         </section>}
         {page === 'Trade' && <section className={`page-section ${tradeFullscreen ? 'trade-fullscreen' : ''}`}>
@@ -1918,7 +2198,9 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
       ? trade.duration
       : 0
   }
-  currentPrice={asset.symbol === 'XAU' ? asset.price : null}
+ currentPrice={asset.price}
+timeframe={chartTimeframe}
+onTimeframeChange={setChartTimeframe}
 />
             {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">Remaining:{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div><div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Duration</small><strong>{trade.duration}s</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div>
   <small>{!trade.done ? 'EXPECTED RESULT' : trade.profit < 0 ? 'LOSS' : 'PROFIT'}</small>
@@ -1932,8 +2214,8 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
       : `Expected ±${money(trade.amount * trade.virtualRate)}`
     }
   </strong>
-</div><div><small>rate</small><strong className="gold-text">{Math.round(trade.virtualRate * 100)}%</strong></div></div><div className="trade-timestamps"><span>Opened: {trade.openTime || trade.startedAt}</span><span>{trade.closeTime ? `Closed: ${trade.closeTime}` : trade.awaitingDone ? 'Timer complete — press Done to record this trade.' : 'Waiting for timer to finish.'}</span></div><Candles compact candles={trade.done || trade.awaitingDone ? (trade.endCandles || liveCandles[trade.symbol] || []) : (liveCandles[trade.symbol] || trade.startCandles || [])} targetPrice={trade.targetPrice} />{trade.awaitingDone && <button className="btn btn-gold btn-full" onClick={finishTrade}>Done — save trade to history</button>}{trade.done && <><p className="result-message">Saved to Profile → Trades with opening price, target price, closing price and chart snapshot.</p><button className="btn btn-gold" onClick={() => { setTrade(null); setRemaining(0) }}>Start another trade</button></>}</div>}
-          </div><div className="panel trade-controls"><div className="control-head"><h2>Place trade</h2><span className="tiny-tag">IG</span></div><div className="label-row"><label>Direction</label></div><div className="direction-row"><button className={`direction buy ${direction === 'BUY' ? 'direction-active' : ''}`} onClick={() => setDirection('BUY')}>↗ BUY</button><button className={`direction sell ${direction === 'SELL' ? 'direction-active' : ''}`} onClick={() => setDirection('SELL')}>↘ SELL</button></div><label className="field-label">Trade duration</label><div className="duration-options">{[30, 60, 120].map(d => <button key={d} className={duration === d ? 'duration-active' : ''} onClick={() => { setDuration(d); setAmount(d === 30 ? '100' : d === 60 ? '12000' : '35000') }}><strong>{d}s</strong><small>{d === 30 ? '20% rate' : d === 60 ? '40% rate' : '80% rate'}</small></button>)}</div><label className="field-label" htmlFor="amount">Amount (USDT)</label><div className="amount-input"><span>$</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="amount-hint">{duration === 30 ? 'Amount range: $20 – $10,000' : duration === 60 ? '$12,000 – $30,000' : '$35,000 – $99,000'} · Account balance: {money(balance)}</div><div className="estimate-box"><div><span>Illustrative result if completed</span><strong className="positive">+{money(Number(amount || 0) * (duration === 30 ? .2 : duration === 60 ? .4 : .8))}</strong></div><small>Profit/loss.</small></div><button className="btn btn-gold btn-full btn-large"disabled={tradeStarting || !!(trade && !trade.done)}onClick={startTrade}
+</div><div><small>rate</small><strong className="gold-text">{Math.round(trade.virtualRate * 100)}%</strong></div></div><div className="trade-timestamps"><span>Opened: {trade.openTime || trade.startedAt}</span><span>{trade.closeTime ? `Closed: ${trade.closeTime}` : trade.awaitingDone ?'': 'Waiting for timer to finish.'}</span></div><Candles compact candles={trade.done || trade.awaitingDone ? (trade.endCandles || liveCandles[trade.symbol] || []) : (liveCandles[trade.symbol] || trade.startCandles || [])} targetPrice={trade.targetPrice} />{trade.awaitingDone && <button className="btn btn-gold btn-full" onClick={finishTrade}>Done — save trade to history</button>}{trade.done && <><p className="result-message">Saved to Profile → Trades with opening price, target price, closing price and chart snapshot.</p><button className="btn btn-gold" onClick={() => { setTrade(null); setRemaining(0) }}>Start another trade</button></>}</div>}
+          </div><div className="panel trade-controls"><div className="control-head"><h2>Place trade</h2><span className="tiny-tag">IG</span></div><div className="label-row"><label>Direction</label></div><div className="direction-row"><button className={`direction buy ${direction === 'BUY' ? 'direction-active' : ''}`} onClick={() => setDirection('BUY')}>↗ BUY</button><button className={`direction sell ${direction === 'SELL' ? 'direction-active' : ''}`} onClick={() => setDirection('SELL')}>↘ SELL</button></div><label className="field-label">Trade duration</label><div className="duration-options">{[30, 60, 120].map(d => <button key={d} className={duration === d ? 'duration-active' : ''} onClick={() => { setDuration(d); setAmount(d === 30 ? '100' : d === 60 ? '12000' : '35000') }}><strong>{d}s</strong><small>{d === 30 ? '20% rate' : d === 60 ? '40% rate' : '80% rate'}</small></button>)}</div><label className="field-label" htmlFor="amount">Amount (USDT)</label><div className="amount-input"><span>$</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="amount-hint">{duration === 30 ? 'Amount range: $20 – $10,000' : duration === 60 ? '$12,000 – $30,000' : '$35,000 – $99,000'} · Account balance: {money(balance)}</div><button className="btn btn-gold btn-full btn-large"disabled={tradeStarting || !!(trade && !trade.done)}onClick={startTrade}
 >{tradeStarting ? 'Saving trade...' : !tradeEnabled ? 'Trading' : trade && !trade.done ? `Trade running · ${remaining}s` : 'Start trade'} <span>↗</span></button><p className="fine-print">IG trading platforms</p></div></div>
         </section>}
 
