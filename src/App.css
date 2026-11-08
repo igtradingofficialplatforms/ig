@@ -742,3 +742,100 @@ body,
     margin-top: 0 !important;
   }
 }
+/* FINAL IGTRADE FULLSCREEN MOBILE FIX */
+@media screen and (max-width: 800px) {
+  .trade-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    background: #0b0b0d !important;
+  }
+
+  .trade-fullscreen .page-title-row {
+    margin: 0 0 8px !important;
+    padding: 0 !important;
+  }
+
+  .trade-fullscreen .trade-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .trade-fullscreen .trade-controls {
+    order: 1 !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 10px !important;
+  }
+
+  .trade-fullscreen .trade-chart-panel {
+    order: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 10px !important;
+  }
+
+  .trade-fullscreen .trade-result {
+    padding: 9px !important;
+    margin: 8px 0 0 !important;
+  }
+
+  .trade-fullscreen .control-head {
+    margin-bottom: 7px !important;
+  }
+
+  .trade-fullscreen .field-label {
+    margin: 8px 0 5px !important;
+  }
+
+  .trade-fullscreen .direction {
+    padding: 8px !important;
+  }
+
+  .trade-fullscreen .duration-options button {
+    min-height: 36px !important;
+    padding: 4px !important;
+  }
+
+  .trade-fullscreen .amount-input input {
+    padding: 8px 0 !important;
+  }
+
+  .trade-fullscreen .estimate-box {
+    margin: 8px 0 !important;
+    padding: 8px !important;
+  }
+
+  .trade-fullscreen .btn-large {
+    min-height: 38px !important;
+    padding: 8px !important;
+  }
+
+  .trade-fullscreen .chart {
+    height: 190px !important;
+  }
+
+  .mobile-nav {
+    display: none !important;
+  }
+
+  .customer-service-float {
+    display: none !important;
+  }
+}
