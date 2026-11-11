@@ -669,12 +669,53 @@ function App() {
   const [page, setPage] = useState('Home')
   const [marketFilter, setMarketFilter] = useState('All')
   const [selected, setSelected] = useState('BTC')
+  const [selectedAsset, setSelectedAsset] = useState('BTC');
+  const [assetsWalletTab, setAssetsWalletTab] = useState('Spot');
+  const [assetsAction, setAssetsAction] = useState('');
+const [transferFrom, setTransferFrom] = useState('Spot');
+const [transferTo, setTransferTo] = useState('Funding');
+const [transferCoin, setTransferCoin] = useState('USDT');
+const [transferAmount, setTransferAmount] = useState('');
+
+const [convertFrom, setConvertFrom] = useState('USDT');
+const [convertTo, setConvertTo] = useState('BTC');
+const [convertAmount, setConvertAmount] = useState('');
+const [convertPreview, setConvertPreview] = useState(null);
   const [amount, setAmount] = useState('100')
   const [duration, setDuration] = useState(30)
   const [direction, setDirection] = useState('BUY')
   const [trade, setTrade] = useState(null)
   const [remaining, setRemaining] = useState(0)
   const [balance, setBalance] = useState(0)
+  const [coinWallets, setCoinWallets] = useState({
+  Spot: {
+    BTC: 0,
+    ETH: 0,
+    SOL: 0,
+    USDC: 0,
+    EUR: 0,
+    GOLD: 0
+  },
+  Funding: {
+    USDT: 0,
+    BTC: 0,
+    ETH: 0,
+    SOL: 0,
+    USDC: 0,
+    EUR: 0,
+    GOLD: 0
+  }
+});
+  const [dailyStartValue, setDailyStartValue] = useState(null);
+
+const estimatedTotalValue = useMemo(() => {
+  return Number(balance || 0);
+}, [balance]);
+
+const todaysPNL = useMemo(() => {
+  if (dailyStartValue === null) return 0;
+  return estimatedTotalValue - dailyStartValue;
+}, [estimatedTotalValue, dailyStartValue]);
   const [tradeStarting, setTradeStarting] = useState(false)
   const [tradeHistory, setTradeHistory] = useState([])
   const [depositMethod, setDepositMethod] = useState('TRC20')
@@ -687,6 +728,7 @@ function App() {
   const [adminOpen, setAdminOpen] = useState(false)
   const [tradeSettingLoaded, setTradeSettingLoaded] = useState(false)
   const [tradeFullscreen, setTradeFullscreen] = useState(false);
+  
 
 useEffect(() => {
   if (!supabase) {
@@ -770,6 +812,7 @@ const setTradeEnabled = async (value) => {
   setToast(nextValue ? 'Trading enabled.' : 'Trading paused.')
 }
 
+
  const [toast, setToast] = useState('')
  const [tradeEnabled, setTradeEnabledState] = useState(false)
   const [loginOpen, setLoginOpen] = useState(window.location.pathname.replace(/\/+$/, '') === '/admin')
@@ -785,7 +828,7 @@ const setTradeEnabled = async (value) => {
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminProfileLoaded, setAdminProfileLoaded] = useState(false)
   const isAdminRoute = window.location.pathname.replace(/\/+$/, '') === '/admin'
-  const [profileTab, setProfileTab] = useState('Trades')
+  const [profileTab, setProfileTab] = useState('Trades History')
   const [expandedTradeId, setExpandedTradeId] = useState(null)
   const [installPrompt, setInstallPrompt] = useState(null)
   const [members, setMembers] = useState([])
@@ -845,15 +888,297 @@ const [walletQrCodes, setWalletQrCodes] = useState({
 
   const [telegramUrl, setTelegramUrl] = useState('https://t.me/igtrading_platforms93')
 
-  const [livePrices, setLivePrices] = useState({})
-  const [liveCandles, setLiveCandles] = useState({})
-  const [marketConnection, setMarketConnection] = useState({ crypto: 'connecting', other: import.meta.env.VITE_TWELVEDATA_API_KEY ? 'connecting' : 'API key required' })
-  const [chartTimeframe, setChartTimeframe] = useState('1m')
-  const chartTimeframeRef = useRef('1m')
+  const [livePrices, setLivePrices] = useState({});
+const [liveCandles, setLiveCandles] = useState({});
+const [marketConnection, setMarketConnection] = useState({
+  crypto: 'connecting',
+  other: import.meta.env.VITE_TWELVEDATA_API_KEY
+    ? 'connecting'
+    : 'API key required'
+});
+
+const [chartTimeframe, setChartTimeframe] = useState('1m');
+const chartTimeframeRef = useRef('1m');
+
+const btcPrice = Number(livePrices.BTC?.price || 0);
+const ethPrice = Number(livePrices.ETH?.price || 0);
+const solPrice = Number(livePrices.SOL?.price || 0);
+const eurPrice = Number(livePrices.EURUSD?.price || 0);
+
+const usdtBalance = Number(balance || 0);
+
+const getWalletBalance = (wallet, coin) => {
+  // Admin virtual balance is Funding USDT
+  if (wallet === 'Funding' && coin === 'USDT') {
+    return Number(balance || 0);
+  }
+
+  // All other coins have separate wallet balances
+  return Number(coinWallets[wallet]?.[coin] || 0);
+};
+
+
+const handleTransfer = async () => {
+  const amount = Number(transferAmount);
+  const coin = transferCoin;
+  const from = transferFrom;
+  const to = transferTo;
+  const userId = authSession?.user?.id;
+
+  if (!supabase || !userId) {
+    return setToast('Please sign in first.');
+  }
+
+  if (from === to) {
+    return setToast('Select different wallets.');
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return setToast('Enter a valid transfer amount.');
+  }
+
+  const available = getWalletBalance(from, coin);
+
+  if (amount > available) {
+    return setToast('Insufficient available balance.');
+  }
+
+  // Prepare separate Spot and Funding coin balances
+  const nextWallets = {
+    Spot: { ...(coinWallets.Spot || {}) },
+    Funding: { ...(coinWallets.Funding || {}) }
+  };
+
+  let nextBalance = Number(balance || 0);
+
+  // Funding USDT is stored in profiles.virtual_balance
+  if (coin === 'USDT') {
+    if (from === 'Funding') {
+      nextBalance -= amount;
+    }
+
+    if (to === 'Funding') {
+      nextBalance += amount;
+    }
+  }
+
+  // Update the coin balances in both wallets
+  if (!(from === 'Funding' && coin === 'USDT')) {
+    nextWallets[from][coin] =
+      Number(nextWallets[from][coin] || 0) - amount;
+  }
+
+  if (!(to === 'Funding' && coin === 'USDT')) {
+    nextWallets[to][coin] =
+      Number(nextWallets[to][coin] || 0) + amount;
+  }
+
+  // Save both balances to Supabase
+   const { data: savedProfile, error } = await supabase
+  .from('profiles')
+  .update({
+    virtual_balance: nextBalance,
+    coin_wallets: nextWallets
+  })
+  .eq('id', userId)
+  .select('id, virtual_balance, coin_wallets')
+  .maybeSingle();
+
+if (error) {
+  console.error('Transfer save failed:', error.message);
+  return setToast('Transfer failed: ' + error.message);
+}
+
+if (!savedProfile) {
+  console.error('Transfer was not saved. Check Supabase RLS policies.');
+  return setToast('Transfer not saved. Supabase permission blocked the update.');
+}
+
+  if (error) {
+    console.error('Transfer save failed:', error.message);
+    return setToast('Transfer failed: ' + error.message);
+  }
+
+  // Update the screen only after Supabase saves successfully
+  setBalance(nextBalance);
+  setCoinWallets(nextWallets);
+
+  setTransferAmount('');
+  setToast(`${amount} ${coin} transferred successfully.`);
+};
+
+const assetRates = {
+  USDT: 1,
+  USDC: 1,
+  BTC: btcPrice,
+  ETH: ethPrice,
+  SOL: solPrice,
+  EUR: eurPrice,
+  GOLD: Number(livePrices.XAU?.price || 0)
+};
+const fundingTotalUSDT =
+  Number(balance || 0) +
+  ['BTC', 'ETH', 'SOL', 'USDC', 'EUR', 'GOLD'].reduce(
+    (total, coin) => {
+      const amount = Number(coinWallets.Funding?.[coin] || 0);
+      const rate = Number(assetRates[coin] || 0);
+
+      return total + (amount * rate);
+    },
+    0
+  );
+
+const handleConvert = async () => {
+  const amount = Number(convertAmount);
+  const from = convertFrom;
+  const to = convertTo;
+  const userId = authSession?.user?.id;
+
+  if (!supabase || !userId) {
+    return setToast('Please sign in first.');
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return setToast('Enter a valid conversion amount.');
+  }
+
+  if (from === to) {
+    return setToast('Select two different coins.');
+  }
+
+  const available = getWalletBalance('Funding', from);
+
+  if (amount > available) {
+    return setToast(`Insufficient ${from} Funding balance.`);
+  }
+
+  const fromRate = Number(assetRates[from] || 0);
+  const toRate = Number(assetRates[to] || 0);
+
+  if (fromRate <= 0 || toRate <= 0) {
+    return setToast('Live market price is not available.');
+  }
+
+  const receiveAmount = Number(
+    ((amount * fromRate) / toRate).toFixed(8)
+  );
+
+  if (!receiveAmount || !Number.isFinite(receiveAmount)) {
+    return setToast('Unable to calculate conversion.');
+  }
+
+  const samePreview =
+    convertPreview &&
+    convertPreview.from === from &&
+    convertPreview.to === to &&
+    convertPreview.amount === amount;
+
+  // First click: show preview
+  if (!samePreview) {
+    setConvertPreview({
+      from,
+      to,
+      amount,
+      receiveAmount,
+      rate: fromRate / toRate
+    });
+    return;
+  }
+
+  // Prepare updated Funding wallet
+  const nextWallets = {
+    Spot: { ...(coinWallets.Spot || {}) },
+    Funding: { ...(coinWallets.Funding || {}) }
+  };
+
+  let nextBalance = Number(balance || 0);
+
+  // Funding USDT is stored in virtual_balance
+  if (from === 'USDT') {
+    nextBalance -= amount;
+  } else {
+    nextWallets.Funding[from] =
+      Number(nextWallets.Funding[from] || 0) - amount;
+  }
+
+  if (to === 'USDT') {
+    nextBalance += receiveAmount;
+  } else {
+    nextWallets.Funding[to] =
+      Number(nextWallets.Funding[to] || 0) + receiveAmount;
+  }
+
+  // Save conversion to Supabase
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      virtual_balance: nextBalance,
+      coin_wallets: nextWallets
+    })
+    .eq('id', userId);
+
+  if (error) {
+    console.error('Conversion save failed:', error.message);
+    return setToast('Conversion failed: ' + error.message);
+  }
+
+  // Update screen after successful save
+  setBalance(nextBalance);
+  setCoinWallets(nextWallets);
+
+  setToast(
+    `Converted ${amount} ${from} to ${receiveAmount} ${to}.`
+  );
+
+  setConvertAmount('');
+  setConvertPreview(null);
+};
+
+
+const selectedRate = assetRates[selectedAsset] || 0;
+
+const availableAmount =
+  selectedRate > 0 ? usdtBalance / selectedRate : 0;
+
+const convertedPNL =
+  selectedRate > 0 ? todaysPNL / selectedRate : 0;
+
+const pnlPercentage =
+  dailyStartValue > 0
+    ? (todaysPNL / dailyStartValue) * 100
+    : 0;
 
 useEffect(() => {
-  chartTimeframeRef.current = chartTimeframe
-}, [chartTimeframe])
+  chartTimeframeRef.current = chartTimeframe;
+}, [chartTimeframe]);
+useEffect(() => {
+  if (!authSession?.user?.id) return;
+
+  const today = new Date().toLocaleDateString('en-CA');
+  const storageKey = `igtrade_daily_start_${authSession.user.id}`;
+
+  const saved = localStorage.getItem(storageKey);
+
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+
+      if (parsed.date === today && Number.isFinite(Number(parsed.value))) {
+        setDailyStartValue(Number(parsed.value));
+        return;
+      }
+    } catch {}
+  }
+
+  const startingValue = Number(balance || 0);
+
+  localStorage.setItem(
+    storageKey,
+    JSON.stringify({ date: today, value: startingValue })
+  );
+
+  setDailyStartValue(startingValue);
+}, [authSession?.user?.id]);
 
   // Supabase authentication: admin access is granted only by the server-stored profiles.role.
   useEffect(() => {
@@ -861,7 +1186,7 @@ useEffect(() => {
     const loadRole = async (session) => {
       setAuthSession(session || null)
       if (!session?.user?.id) { setIsAdmin(false); setAdminProfileLoaded(true); return }
-      const { data, error } = await supabase.from('profiles').select('role,display_name,email,virtual_balance').eq('id', session.user.id).maybeSingle()
+      const { data, error } = await supabase.from('profiles').select('role,display_name,email,virtual_balance,coin_wallets').eq('id', session.user.id).maybeSingle()
       setProfileName(
         data?.display_name ||
         session.user.user_metadata?.full_name ||
@@ -869,10 +1194,23 @@ useEffect(() => {
         ''
       );
 
-      setProfileEmail(session.user.email || session.user.phone || '');
-      setIsAdmin(!error && data?.role === 'admin')
-      if (!error && data?.role === 'admin') setAdminOpen(true)
-      if (!error && data && Number.isFinite(Number(data.virtual_balance))) setBalance(Number(data.virtual_balance))
+     setProfileEmail(session.user.email || session.user.phone || '');
+
+setIsAdmin(!error && data?.role === 'admin');
+
+if (!error && data?.role === 'admin') {
+  setAdminOpen(true);
+}
+
+if (!error && data) {
+  if (Number.isFinite(Number(data.virtual_balance))) {
+    setBalance(Number(data.virtual_balance));
+  }
+
+  if (data.coin_wallets) {
+    setCoinWallets(data.coin_wallets);
+  }
+}
       setAdminProfileLoaded(true)
     }
     supabase.auth.getSession().then(({ data }) => loadRole(data.session))
@@ -956,7 +1294,7 @@ const refreshAccount = async () => {
 ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('virtual_balance')
+      .select('virtual_balance, coin_wallets')
       .eq('id', userId)
       .maybeSingle(),
 
@@ -1005,8 +1343,12 @@ const refreshAccount = async () => {
     if (profileError) {
       console.error('Balance load error:', profileError.message);
     } else if (profile) {
-      setBalance(Number(profile.virtual_balance));
-    }
+  setBalance(Number(profile.virtual_balance || 0));
+
+  if (profile.coin_wallets) {
+    setCoinWallets(profile.coin_wallets);
+  }
+}
 
     if (tradeError) {
   console.error('Trade history error:', tradeError.message);
@@ -1077,6 +1419,9 @@ const refreshAccount = async () => {
           Number.isFinite(Number(payload.new.virtual_balance))
         ) {
           setBalance(Number(payload.new.virtual_balance));
+          if (active && payload.new?.coin_wallets) {
+  setCoinWallets(payload.new.coin_wallets);
+}
         }
       }
     )
@@ -1133,7 +1478,7 @@ const refreshAccount = async () => {
         setToast(authMode === 'register' ? 'Account created and signed in.' : 'Signed in successfully.')
       }
       if (result.data?.session) {
-        const { data: profile } = await supabase.from('profiles').select('role,virtual_balance').eq('id', result.data.session.user.id).maybeSingle()
+        const { data: profile } = await supabase.from('profiles').select('role,virtual_balance,coin_wallets').eq('id', result.data.session.user.id).maybeSingle()
         setIsAdmin(profile?.role === 'admin')
         if (profile?.role === 'admin' && isAdminRoute) setAdminOpen(true)
         if (profile && Number.isFinite(Number(profile.virtual_balance))) setBalance(Number(profile.virtual_balance))
@@ -2132,7 +2477,7 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-caption">WORKSPACE</div>
-        {['Home', 'Trade', 'Deposit', 'Withdraw', 'Profile'].map((item, i) => <button key={item} onClick={() => setPage(item)} className={`nav-item ${page === item ? 'active' : ''}`}><span className="nav-icon">{['⌂', '↗', '↓', '↑', '◉'][i]}</span>{t(item)}</button>)}
+        {['Home', 'Trade', 'Deposit', 'Withdraw', 'Assets'].map((item, i) => <button key={item} onClick={() => setPage(item)} className={`nav-item ${page === item ? 'active' : ''}`}><span className="nav-icon">{['⌂', '↗', '↓', '↑', '◉'][i]}</span>{t(item)}</button>)}
         <div className="side-spacer" />
       </aside>
 
@@ -2140,7 +2485,59 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
   <WithdrawalTicker />
 
   {page === 'Home' && <section className="page-section">
-          <div className="welcome-row"><div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade CFDs with the world’s No.1 provider1.</h1><p className="hero-subtitle"></p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div><div className="balance-card"><div className="balance-title"><span className="wallet-icon">＄</span><span>USDT balance</span></div><div className="balance-number">{money(balance)} <span>USDT</span></div><div className="balance-footer"><span className="positive">● Available funds</span><button className="text-button" onClick={() => setPage('Profile')}>View wallet ↗</button></div></div></div>
+          <div className="welcome-row"><div><div className="binance-wallet panel">
+
+  <div className="wallet-heading">
+  <span>Estimated Total Value</span>
+
+  <label className="wallet-select-wrap">
+    <select
+      value={selectedAsset}
+      onChange={(e) => setSelectedAsset(e.target.value)}
+      className="wallet-currency-select"
+    >
+      <option value="USDT">USDT</option>
+      <option value="BTC">BTC</option>
+      <option value="ETH">ETH</option>
+      <option value="SOL">SOL</option>
+      <option value="EUR">EUR</option>
+    </select>
+    <span>▼</span>
+  </label>
+</div>
+  <div className="wallet-total">
+    ${usdtBalance.toFixed(2)} USDT
+  </div>
+
+  <div className="wallet-available">
+    ● Available funds · ≈ {availableAmount.toFixed(8)} {selectedAsset}
+  </div>
+
+  <div className="wallet-conversion">
+    ≈ {availableAmount.toFixed(8)} {selectedAsset}
+  </div>
+
+  <div className="wallet-pnl">
+    <span>Today's PNL</span>
+
+    <strong className={todaysPNL >= 0 ? 'positive' : 'negative'}>
+      {todaysPNL >= 0 ? '+' : '-'}
+      {Math.abs(convertedPNL).toFixed(8)} {selectedAsset}
+      {' '}
+      ({pnlPercentage >= 0 ? '+' : ''}
+      {pnlPercentage.toFixed(2)}%)
+    </strong>
+  </div>
+
+  <button
+    className="add-funds-btn"
+    onClick={() => setPage('Deposit')}
+  >
+    + Add funds
+  </button>
+
+</div>
+<div className="ticker-wrap"></div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade CFDs with the world’s No.1 provider1.</h1><p className="hero-subtitle"></p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div></div>
           <div className="ticker-wrap"><div className="ticker-track">{[...markets, ...markets].map((m, i) => <div className="ticker-item" key={`${m.symbol}-${i}`}><strong>{m.name}</strong><span>{quotePrice(m.price, m.symbol)}</span><small className={m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</small></div>)}</div></div>
           <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2><p className="muted">Market crypto {marketConnection.crypto}; stocks, forex, indices and gold {marketConnection.other}IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG Group established in London in 1974, and is a constituent of the FTSE 250 index</p><p className="muted">Crypto {marketConnection.crypto}. Stocks/Gold {marketConnection.other}.IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
           <div className="market-grid">{filterMarkets.map(m => <button key={m.symbol} className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`} onClick={() => { setSelected(m.symbol); setPage('Trade') }}><div className="coin-row"><MarketIcon symbol={m.symbol} /><span><strong>{m.pair}</strong><small>{m.name}</small></span><span className={`change ${m.change >= 0 ? 'positive' : 'negative'}`}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</span></div><div className="market-price">{quotePrice(m.price, m.symbol)}</div><div className="mini-spark"><svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline points={m.change >= 0 ? "0,25 12,20 24,23 38,9 52,15 65,7 78,13 91,4 105,8 120,2" : "0,4 12,8 24,3 38,13 52,9 65,20 78,14 91,23 105,18 120,27"} fill="none" stroke={m.change >= 0 ? '#45d3a1' : '#ff6b73'} strokeWidth="2" /></svg></div></button>)}</div>
@@ -2406,186 +2803,540 @@ onTimeframeChange={setChartTimeframe}
           </section>
         )}
 
-        {page === 'Profile' && <section className="page-section"><div className="eyebrow">ACCOUNT CENTRE</div><h1>Your <span className="gold-text">profile</span></h1><div className="profile-hero panel"><div className="profile-avatar">IG</div><div className="profile-info"><h2>
-          {profileName ||
+       
+{page === 'Assets' && (
+  <section className="page-section assets-page">
+    <div className="eyebrow">WALLET OVERVIEW</div>
+    <h1>Your <span className="gold-text">Assets</span></h1>
 
+    <div className="assets-total-card panel">
+      <div className="assets-total-heading">
+        <span>Estimated Total Value</span>
+        <select
+          value={selectedAsset}
+          onChange={e => setSelectedAsset(e.target.value)}
+          className="wallet-currency-select"
+        >
+          <option value="USDT">USDT</option>
+          <option value="BTC">BTC</option>
+          <option value="ETH">ETH</option>
+          <option value="SOL">SOL</option>
+          <option value="EUR">EUR</option>
+        </select>
+      </div>
+
+      <h1>{money(balance)} <small>USDT</small></h1>
+      <p className="muted">● Available funds</p>
+
+      <div className="assets-pnl">
+        <span>Today's PNL</span>
+        <strong className={todaysPNL >= 0 ? 'positive' : 'negative'}>
+          {todaysPNL >= 0 ? '+' : '-'}
+          {money(Math.abs(todaysPNL))} USDT
+          ({pnlPercentage >= 0 ? '+' : ''}{pnlPercentage.toFixed(2)}%)
+        </strong>
+      </div>
+    </div>
+
+    <div className="assets-actions">
+      <button onClick={() => setPage('Deposit')}>
+        <span>＋</span><small>Add funds</small>
+      </button>
+      <button onClick={() => setPage('Withdraw')}>
+        <span>↑</span><small>Send</small>
+      </button>
+      <button onClick={() => setAssetsAction('Transfer')}>
+        <span>⇄</span><small>Transfer</small>
+      </button>
+      <button onClick={() => setAssetsAction('Convert')}>
+  <span>⇄</span><small>Convert</small>
+</button>
+     <button onClick={() => setAssetsAction('Earn')}>
+        <span>◇</span><small>Earn</small>
+      </button>
+    </div>
+   {assetsAction === 'Transfer' && (
+  <div className="panel form-panel">
+    <div className="section-heading">
+      <h2>Transfer</h2>
+      <button onClick={() => setAssetsAction('')}>✕</button>
+    </div>
+
+    <div className="transfer-wallet-select">
+  <div className="transfer-wallet-box">
+    <label className="field-label">From</label>
+    <select
+      className="text-input"
+      value={transferFrom}
+      onChange={e => {
+        const value = e.target.value;
+        setTransferFrom(value);
+        setTransferTo(value === 'Spot' ? 'Funding' : 'Spot');
+      }}
+    >
+      <option value="Spot">Spot Wallet</option>
+      <option value="Funding">Funding Wallet</option>
+    </select>
+  </div>
+
+  <div className="transfer-swap-center">
+    <button
+      type="button"
+      className="transfer-swap-btn"
+      onClick={() => {
+        setTransferFrom(transferTo);
+        setTransferTo(transferFrom);
+      }}
+      title="Swap wallets"
+    >
+      ⇅
+    </button>
+  </div>
+
+  <div className="transfer-wallet-box">
+    <label className="field-label">To</label>
+    <select
+      className="text-input"
+      value={transferTo}
+      onChange={e => setTransferTo(e.target.value)}
+    >
+      <option value="Spot">Spot Wallet</option>
+      <option value="Funding">Funding Wallet</option>
+    </select>
+  </div>
+</div>
+
+    <label className="field-label">Coin</label>
+    <select className="text-input" value={transferCoin}
+      onChange={e => setTransferCoin(e.target.value)}>
+      {['USDT','BTC','ETH','SOL','USDC','EUR','GOLD'].map(c =>
+        <option key={c} value={c}>{c}</option>
+      )}
+    </select>
+
+    <label className="field-label">
+  Amount
+  <button
+    type="button"
+    className="max-btn"
+    onClick={() => {
+      const available = getWalletBalance(transferFrom, transferCoin);
+setTransferAmount(String(available));
+    }}
+  >
+    MAX
+  </button>
+</label>
+
+<input
+  className="text-input"
+  type="number"
+  min="0"
+  value={transferAmount}
+  onChange={e => setTransferAmount(e.target.value)}
+  placeholder="Enter amount"
+/>
+
+   <button
+  type="button"
+  className="btn btn-gold btn-full"
+  onClick={handleTransfer}
+>
+  Confirm Transfer
+</button>
+  </div>
+)}
+
+{assetsAction === 'Convert' && (
+  <div className="panel form-panel">
+    <div className="section-heading">
+      <h2>Convert</h2>
+      <button onClick={() => setAssetsAction('')}>✕</button>
+    </div>
+
+    <label className="field-label">From</label>
+    <select className="text-input" value={convertFrom}
+      onChange={e => setConvertFrom(e.target.value)}>
+      {['USDT','BTC','ETH','SOL','USDC','EUR','GOLD'].map(c =>
+        <option key={c} value={c}>{c}</option>
+      )}
+    </select>
+
+    <div className="convert-swap-row">
+  <button
+    type="button"
+    className="convert-swap-btn"
+    onClick={() => {
+      setConvertFrom(convertTo);
+      setConvertTo(convertFrom);
+    }}
+  >
+    ⇅
+  </button>
+</div>
+
+    <label className="field-label">To</label>
+    <select className="text-input" value={convertTo}
+      onChange={e => setConvertTo(e.target.value)}>
+      {['USDT','BTC','ETH','SOL','USDC','EUR','GOLD']
+        .filter(c => c !== convertFrom)
+        .map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
+
+    <label className="field-label">Amount</label>
+
+<div className="amount-input-wrap">
+  <input
+    className="text-input"
+    type="number"
+    min="0"
+    value={convertAmount}
+   onChange={e => {
+  setConvertAmount(e.target.value);
+  setConvertPreview(null);
+}}
+    placeholder="Enter amount"
+  />
+
+  <button
+    type="button"
+    className="amount-max-btn"
+    onClick={() => {
+  const available = getWalletBalance('Funding', convertFrom);
+  setConvertAmount(String(available));
+  setConvertPreview(null);
+}}
+  >
+    MAX
+  </button>
+</div>
+
+    <p className="muted">
+      Conversion will use the live market exchange rate.
+      Converted coins will go to your Funding Wallet.
+    </p>
+
+    <button className="btn btn-gold btn-full"
+  onClick={handleConvert}>
+  Preview Conversion
+</button>
+{convertPreview &&
+  convertPreview.from === convertFrom &&
+  convertPreview.to === convertTo &&
+  convertPreview.amount === Number(convertAmount) && (
+    <div className="panel">
+      <p>Conversion Preview</p>
+      <strong>
+        {convertPreview.amount} {convertPreview.from}
+      </strong>
+      <p>↓</p>
+      <strong>
+        {convertPreview.receiveAmount} {convertPreview.to}
+      </strong>
+      <p className="muted">
+        Estimated live market conversion rate
+      </p>
+    </div>
+)}
+  </div>
+)}
+    <div className="panel assets-wallet-panel">
+      <div className="assets-tabs">
+        <button
+          className={assetsWalletTab === 'Spot' ? 'selected' : ''}
+          onClick={() => setAssetsWalletTab('Spot')}
+        >
+          Spot
+        </button>
+        <button
+          className={assetsWalletTab === 'Funding' ? 'selected' : ''}
+          onClick={() => setAssetsWalletTab('Funding')}
+        >
+          Funding
+        </button>
+      </div>
+
+     
+
+<div className="assets-coin-list">
+  {['USDT', 'BTC', 'ETH', 'SOL', 'USDC', 'EUR', 'GOLD'].map(coin => {
+    const wallet = assetsWalletTab;
+    const amount = getWalletBalance(wallet, coin);
+
+    if (amount <= 0) return null;
+
+    const usdValue = amount * Number(assetRates[coin] || 0);
+    const marketSymbol = coin === 'GOLD' ? 'XAU' : coin;
+    const marketData = livePrices[marketSymbol];
+    const change = Number(marketData?.change ?? 0);
+
+    const logoNames = {
+      USDT: 'usdt',
+      BTC: 'btc',
+      ETH: 'eth',
+      SOL: 'sol',
+      USDC: 'usdc',
+      EUR: 'eur',
+      GOLD: 'gold'
+    };
+
+    return (
+      <div className="assets-balance-row" key={coin}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <img
+            src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${logoNames[coin]}.png`}
+            alt={coin}
+            width="36"
+            height="36"
+            style={{ borderRadius: '50%' }}
+            onError={e => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.nextElementSibling.style.display = 'flex';
+            }}
+          />
+
+          <div style={{
+            display: 'none',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: '#30343b',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700
+          }}>
+            {coin.slice(0, 1)}
+          </div>
+
+          <div>
+            <strong>{coin}</strong>
+            <small>{wallet} Wallet · Available balance</small>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <strong>
+            {amount.toLocaleString('en-US', {
+              maximumFractionDigits: 8
+            })} {coin}
+          </strong>
+
+          <small>≈ {money(usdValue)} USD</small>
+
+          <small style={{
+            color: change > 0
+              ? '#0ecb81'
+              : change < 0
+                ? '#f6465d'
+                : 'inherit',
+            fontWeight: 600
+          }}>
+            {change > 0 ? '+' : ''}
+            {change.toFixed(3)}%
+          </small>
+        </div>
+      </div>
+    );
+  })}
+</div>
+</div>
+
+    <div className="stat-grid">
+      <div className="panel stat-card">
+        <small>Account balance</small>
+        <strong>{money(balance)}</strong>
+        <span className="muted">USDT funds</span>
+      </div>
+
+      <div className="panel stat-card">
+        <small>Trades</small>
+        <strong>{tradeHistory.length}</strong>
+        <span className="muted">Completed trades</span>
+      </div>
+
+      <div className="panel stat-card">
+        <small>Wallet requests</small>
+        <strong>{requests.length}</strong>
+        <span className="muted">Deposit / Withdraw</span>
+      </div>
+    </div>
+
+    <div className="panel history-panel">
+      <div className="history-tabs">
+        {['Trade History', 'Deposit History', 'Withdraw History'].map(tab => (
+          <button
+            key={tab}
+            className={profileTab === tab ? 'selected' : ''}
+            onClick={() => setProfileTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {profileTab === 'Trade History' ? (
+        tradeHistory.length ? (
+          tradeHistory.map((t, i) => (
+            <div className="history-trade-wrap" key={t.id || i}>
+              <button
+                className="history-row history-row-button"
+                onClick={() =>
+                  setExpandedTradeId(
+                    expandedTradeId === (t.id || i) ? null : (t.id || i)
+                  )
+                }
+              >
+                <span className="history-icon">↗</span>
+                <div className="history-main">
+                  <strong>{t.direction} {t.assetName || t.symbol} · {t.symbol}</strong>
+                  <small>{t.resultAt} · {t.duration}s trade · click for details</small>
+                </div>
+                <div className="history-amount">
+                  <strong className={t.profit < 0 ? 'negative' : 'positive'}>
+                    {t.profit < 0 ? '-' : '+'}{money(Math.abs(t.profit))}
+                  </strong>
+                  <small>
+                    {expandedTradeId === (t.id || i) ? 'Hide details ↑' : 'View details ↓'}
+                  </small>
+                </div>
+              </button>
+
+              {expandedTradeId === (t.id || i) && (
+                <div className="history-detail">
+                  <div>
+                    <small>Opening price</small>
+                    <strong>{quotePrice(t.openPrice ?? t.price, t.symbol)}</strong>
+                  </div>
+                  <div>
+                    <small>Target price</small>
+                    <strong>{quotePrice(t.targetPrice, t.symbol)}</strong>
+                  </div>
+                  <div>
+                    <small>Closing price</small>
+                    <strong>{quotePrice(t.endPrice, t.symbol)}</strong>
+                  </div>
+                  <div>
+                    <small>Trade amount</small>
+                    <strong>{money(t.amount)}</strong>
+                  </div>
+                  <div>
+                    <small>{t.profit < 0 ? 'Loss' : 'Profit'}</small>
+                    <strong className={t.profit < 0 ? 'negative' : 'positive'}>
+                      {t.profit < 0 ? '-' : '+'}{money(Math.abs(t.profit))}
+                    </strong>
+                  </div>
+                  <div>
+                    <small>Rate</small>
+                    <strong>{Math.round(t.virtualRate * 100)}%</strong>
+                  </div>
+                  <div className="history-chart-full">
+                    <Candles compact candles={t.endCandles || t.startCandles || []} />
+                  </div>
+                  <p>Opened: {t.openTime || t.startedAt} · Closed: {t.closeTime || t.resultAt}</p>
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">
+            <span>◌</span>
+            <strong>No trades yet</strong>
+            <p>Completed trades will appear here.</p>
+          </div>
+        )
+      ) : (
+        requests.filter(r =>
+          r.type === (profileTab === 'Deposit History' ? 'Deposit' : 'Withdraw')
+        ).length ? (
+          requests.filter(r =>
+            r.type === (profileTab === 'Deposit History' ? 'Deposit' : 'Withdraw')
+          ).map(r => (
+            <div className="history-row" key={r.id}>
+              <span className="history-icon">
+                {r.type === 'Deposit' ? '↓' : '↑'}
+              </span>
+              <div className="history-main">
+                <strong>{r.type} · {r.method}</strong>
+                <small>{r.created}</small>
+                {r.type === 'Withdraw' && (
+                  <small className="history-wallet-address">
+                    Wallet Address: {r.address || 'Address unavailable'}
+                  </small>
+                )}
+                {r.adminNote && (
+                  <div className="history-detail">
+                    <small>Dear user</small>
+                    <p>{r.adminNote}</p>
+                  </div>
+                )}
+              </div>
+              <div className="history-amount">
+                <strong className={r.type === 'Withdraw' ? 'negative' : 'positive'}>
+                  {r.type === 'Withdraw' ? '-' : '+'}{money(Math.abs(Number(r.amount)))}
+                </strong>
+                <small>Status: {r.status}</small>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">
+            <span>◌</span>
+            <strong>No {profileTab.toLowerCase()} yet</strong>
+            <p>Your requests will appear here.</p>
+          </div>
+        )
+      )}
+    </div>
+
+    <div className="profile-hero panel">
+      <div className="profile-avatar">IG</div>
+      <div className="profile-info">
+        <h2>
+          {profileName ||
             authSession?.user?.user_metadata?.full_name ||
             authSession?.user?.email?.split('@')[0] ||
             authSession?.user?.phone ||
             'IGtrade Official Platforms Account'}
         </h2>
 
-          {authSession?.user ? (
-            <button
-              className="btn btn-outline"
-              onClick={async () => {
-                const { error } = await supabase.auth.signOut();
-                if (error) {
-                  setToast(error.message);
-                  return;
-                }
-                setAuthSession(null);
-                setProfileName('');
-                setProfileEmail('');
-                setIsAdmin(false);
-                setToast('Signed out successfully.');
-              }}
-            >
-              Sign out
-            </button>
-          ) : (
-            <button
-              className="btn btn-outline"
-              onClick={() => {
-                setAuthMode('login');
-                setLoginOpen(true);
-              }}
-            >
-              Sign in
-            </button>
-          )}
+        {authSession?.user ? (
+          <button
+            className="btn btn-outline"
+            onClick={async () => {
+              const { error } = await supabase.auth.signOut();
+              if (error) return setToast(error.message);
+              setAuthSession(null);
+              setProfileName('');
+              setProfileEmail('');
+              setIsAdmin(false);
+              setToast('Signed out successfully.');
+            }}
+          >
+            Sign out
+          </button>
+        ) : (
+          <button
+            className="btn btn-outline"
+            onClick={() => {
+              setAuthMode('login');
+              setLoginOpen(true);
+            }}
+          >
+            Sign in
+          </button>
+        )}
 
-          <p className="muted">Account</p>
-          <span className="status-pill status-on">crypto & Stock funds</span>
-        </div>
-        </div>
+        <p className="muted">Account</p>
+        <span className="status-pill status-on">IGtrade Account</span>
+      </div>
+    </div>
+  </section>
+)}
 
-          <div className="stat-grid">
-            <div className="panel stat-card">
-              <small>Account balance</small>
-              <strong>{money(balance)}</strong>
-              <span className="muted">USDT funds</span>
-            </div>
-
-            <div className="panel stat-card">
-              <small>Trades</small>
-              <strong>{tradeHistory.length}</strong>
-              <span className="muted">Completed trades</span>
-            </div>
-
-            <div className="panel stat-card">
-              <small>Wallet requests</small>
-              <strong>{requests.length}</strong>
-              <span className="muted">Deposit / Withdraw</span>
-            </div>
-          </div>
-
-          <div className="panel history-panel">
-            <div className="history-tabs">
-              {['Trades', 'Deposits', 'Withdrawals'].map(t => (
-                <button
-                  key={t}
-                  className={profileTab === t ? 'selected' : ''}
-                  onClick={() => setProfileTab(t)}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-
-            {profileTab === 'Trades' ? (
-              tradeHistory.length ? (
-                tradeHistory.map((t, i) => (
-                  <div className="history-trade-wrap" key={t.id || i}>
-                    <button
-                      className="history-row history-row-button"
-                      onClick={() =>
-                        setExpandedTradeId(
-                          expandedTradeId === (t.id || i) ? null : (t.id || i)
-                        )
-                      }
-                    >
-                      <span className="history-icon">↗</span>
-                      <div className="history-main">
-                        <strong>{t.direction} {t.assetName || t.symbol} · {t.symbol}</strong>
-                        <small>{t.resultAt} · {t.duration}s trade · click for details</small>
-                      </div>
-                      <div className="history-amount">
-                        <strong className={t.profit < 0 ? 'negative' : 'positive'}>
-                        {t.profit < 0 ? '-' : '+'}{money(Math.abs(t.profit))}
-                         </strong>
-                        <small>
-                          {expandedTradeId === (t.id || i) ? 'Hide details ↑' : 'View details ↓'}
-                        </small>
-                      </div>
-                    </button>
-
-                    {expandedTradeId === (t.id || i) && (
-                      <div className="history-detail">
-                        <div><small>Opening price</small><strong>{quotePrice(t.openPrice ?? t.price, t.symbol)}</strong></div>
-                        <div><small>Target price</small><strong>{quotePrice(t.targetPrice, t.symbol)}</strong></div>
-                        <div><small>Closing price</small><strong>{quotePrice(t.endPrice, t.symbol)}</strong></div>
-                        <div><small>Trade amount</small><strong>{money(t.amount)}</strong></div>
-                        <div>
-                       <small>{t.profit < 0 ? 'Loss' : 'Profit'}</small>
-                        <strong className={t.profit < 0 ? 'negative' : 'positive'}>
-                         {t.profit < 0 ? '-' : '+'}{money(Math.abs(t.profit))}
-                           </strong>
-                          </div>
-                        <div><small>Rate</small><strong>{Math.round(t.virtualRate * 100)}%</strong></div>
-                        <div className="history-chart-full">
-                          <Candles compact candles={t.endCandles || t.startCandles || []} />
-                        </div>
-                        <p>Opened: {t.openTime || t.startedAt} · Closed: {t.closeTime || t.resultAt}</p>
-                        <small>Trade data.</small>
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">
-                  <span>◌</span>
-                  <strong>No trades yet</strong>
-                  <p>Completed trades will appear here.</p>
-                </div>
-              )
-            ) : (
-              requests.filter(r =>
-                r.type === (profileTab === 'Deposits' ? 'Deposit' : 'Withdraw')
-              ).length ? (
-                requests.filter(r =>
-                  r.type === (profileTab === 'Deposits' ? 'Deposit' : 'Withdraw')
-                ).map(r => (
-                  <div className="history-row" key={r.id}>
-                    <span className="history-icon">{r.type === 'Deposit' ? '↓' : '↑'}</span>
-                    <div className="history-main">
-                 <strong>{r.type} · {r.method}</strong>
-              <small>{r.created}</small>
-
-             {r.type === 'Withdraw' && (
-            <small className="history-wallet-address">
-          Wallet Address: {r.address || 'Address unavailable'}
-             </small>
-             )}
-             </div>
-                    
-                     <div className="history-amount">
-                  <strong className={r.type === 'Withdraw' ? 'negative' : 'positive'}>
-                   {r.type === 'Withdraw' ? '-' : '+'}{money(Math.abs(Number(r.amount)))}
-                </strong>
-                 <small>
-                Status: {r.status}
-                    </small>
-                    </div>
-                  {r.adminNote && (
-                    <div className="history-detail">
-                  <small>Dear user</small>
-                   <p>{r.adminNote}</p>
-                       </div>
-                      )}
-
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">
-                  <span>◌</span>
-                  <strong>No {profileTab.toLowerCase()} yet</strong>
-                  <p>Your requests will appear here.</p>
-                </div>
-              )
-            )}
-          </div>
-        </section>}
 
         {isAdmin && authSession && adminOpen && <AdminPanel
           adminOpen={adminOpen} setAdminOpen={setAdminOpen}
@@ -2609,7 +3360,7 @@ setTelegramUrl={setTelegramUrl}
 .</p>}</form>}</div></div>}
 
         {toast && <div className="toast"><span>✦</span>{toast}<button onClick={() => setToast('')}>×</button></div>}
-        <nav className="mobile-nav">{['Home', 'Trade', 'Deposit', 'Withdraw', 'Profile'].map((item, i) => <button key={item} onClick={() => setPage(item)} className={page === item ? 'mobile-active' : ''}><span>{['⌂', '↗', '↓', '↑', '◉'][i]}</span><small>{item}</small></button>)}</nav>
+        <nav className="mobile-nav">{['Home', 'Trade', 'Deposit', 'Withdraw', 'Assets'].map((item, i) => <button key={item} onClick={() => setPage(item)} className={page === item ? 'mobile-active' : ''}><span>{['⌂', '↗', '↓', '↑', '◉'][i]}</span><small>{item}</small></button>)}</nav>
         <footer className="footer"><div className="footer-brand"><span className="ig-square-logo">IG</span><span>© 1998 IGtrade</span></div><div className="footer-links"><a href="https://www.ig.com/en/terms-and-agreements" target="_blank" rel="noreferrer">Terms and agreements</a><a href="https://www.ig.com/en/privacy" target="_blank" rel="noreferrer">Privacy</a><a href="https://www.ig.com/en/fund-your-account" target="_blank" rel="noreferrer">How to fund</a><a href="https://www.ig.com/en/client-vulnerability" target="_blank" rel="noreferrer">Vulnerability</a><a href="https://www.ig.com/en/cookies" target="_blank" rel="noreferrer">Cookies</a><a href="https://www.ig.com/en/about-us" target="_blank" rel="noreferrer">About IG</a></div><div className="footer-social"><strong>Follow us online</strong><a href="https://www.facebook.com/IGInternational2" target="_blank" rel="noreferrer">Facebook</a><a href="https://twitter.com/IGInternational" target="_blank" rel="noreferrer">X</a><a href="https://www.youtube.com/channel/UCZj-ae-S_X-mocAH3xQnpUw" target="_blank" rel="noreferrer">YouTube</a><a href="https://www.linkedin.com/showcase/35901904/admin/" target="_blank" rel="noreferrer">LinkedIn</a></div><p className="footer-disclaimer">G International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p>
            </footer>
         </main>
