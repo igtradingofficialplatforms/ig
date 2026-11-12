@@ -7,10 +7,13 @@ export default function AdminPanel({
   memberEmail, setMemberEmail, memberAmount, setMemberAmount, memberAction,
   adjustMemberBalance, members, walletAddresses, setWalletAddresses, setToast,
   telegramUrl, setTelegramUrl,
-walletQrCodes, saveWalletSettings
+  walletQrCodes, saveWalletSettings,
+  advancedRequests = [],
+  reviewAdvancedRequest
 }) {
   const [requestFilter, setRequestFilter] = useState('All');
   const [rejectionNotes, setRejectionNotes] = useState({});
+  const [advancedRejectionNotes, setAdvancedRejectionNotes] = useState({});
   const [qrFiles, setQrFiles] = useState({
   TRC20: null,
   BTC: null,
@@ -42,7 +45,101 @@ walletQrCodes, saveWalletSettings
           {r.status === 'Pending' && <><label className="field-label">Rejection reason / message (required to reject)</label><textarea className="text-input" rows={3} value={rejectionNotes[r.id] || ''} onChange={e => setRejectionNotes(v => ({...v, [r.id]: e.target.value}))} placeholder="Write why this request is rejected..." /><div className="request-actions"><button onClick={() => approveRequest(r.id, 'Approved', '')} className="btn btn-small btn-gold">Approve</button><button onClick={() => { const note = (rejectionNotes[r.id] || '').trim(); if (!note) { setToast('Write a rejection reason before rejecting this request.'); return; } approveRequest(r.id, 'Rejected', note); }} className="btn btn-small btn-outline">Reject</button></div></>}
         </div>
       )) : <div className="empty-state"><strong>No requests in this filter</strong><p>New submitted requests will appear here.</p></div>}
+     <div className="admin-section-title">
+  Advanced Borrow Requests ({advancedRequests.length})
+</div>
 
+{advancedRequests.length ? advancedRequests.map(r => (
+  <div className="request-card" key={r.id}>
+    <div className="request-top">
+      <strong>Borrow · {r.asset}</strong>
+      <span className={`request-status ${(r.status || '').toLowerCase()}`}>
+        {r.status}
+      </span>
+    </div>
+
+    <div className="request-amount">
+      {money(r.amount)}
+      <small> Requested amount</small>
+    </div>
+
+    <div className="request-detail">
+      <small>Member</small>
+      <p>{r.user_email || r.email || 'Member'}</p>
+    </div>
+
+    <div className="request-detail">
+      <small>Collateral</small>
+      <p>
+        {r.collateral_amount || 0} {r.collateral_asset || 'N/A'}
+      </p>
+    </div>
+
+    <small>
+      Submitted: {r.created_at
+        ? new Date(r.created_at).toLocaleString()
+        : 'N/A'}
+    </small>
+
+    {r.admin_note && (
+      <div className="request-detail">
+        <small>Admin message</small>
+        <p>{r.admin_note}</p>
+      </div>
+    )}
+
+    {r.status === 'Pending' && (
+      <>
+        <label className="field-label">
+          Rejection reason (required)
+        </label>
+
+        <textarea
+          className="text-input"
+          rows={3}
+          value={advancedRejectionNotes[r.id] || ''}
+          onChange={e =>
+            setAdvancedRejectionNotes(v => ({
+              ...v,
+              [r.id]: e.target.value
+            }))
+          }
+          placeholder="Write rejection reason..."
+        />
+
+        <div className="request-actions">
+          <button
+            className="btn btn-small btn-gold"
+            onClick={() => reviewAdvancedRequest?.(r.id, 'Approved', '')}
+          >
+            Approve
+          </button>
+
+          <button
+            className="btn btn-small btn-outline"
+            onClick={() => {
+              const note = (advancedRejectionNotes[r.id] || '').trim();
+
+              if (!note) {
+                setToast('Write a rejection reason first.');
+                return;
+              }
+
+              reviewAdvancedRequest?.(r.id, 'Rejected', note);
+            }}
+          >
+            Reject
+          </button>
+        </div>
+      </>
+    )}
+  </div>
+)) : (
+  <div className="empty-state">
+    <strong>No borrow requests</strong>
+    <p>New Advanced Borrow requests will appear here.</p>
+  </div>
+)}
       <div className="admin-section-title">
   Student current balances ({members.length})
 </div>

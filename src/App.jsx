@@ -1,3 +1,4 @@
+
 import {
   SiBitcoin,
   SiEthereum,
@@ -667,6 +668,351 @@ function App() {
   const t = (key) => uiTranslations[language]?.[key] || key
   const [countryCode, setCountryCode] = useState('')
   const [page, setPage] = useState('Home')
+  const [earnPositions, setEarnPositions] = useState(() => {
+  try {
+    return JSON.parse(
+      localStorage.getItem('igtrade-earn-positions') || '[]'
+    );
+  } catch {
+    return [];
+  }
+});
+
+const [earnTab, setEarnTab] = useState('Simple Earn');
+
+const [advancedSelection, setAdvancedSelection] = useState('');
+const [advancedAmount, setAdvancedAmount] = useState('');
+const [advancedCollateral, setAdvancedCollateral] = useState('');
+const [advancedCollateralAsset, setAdvancedCollateralAsset] = useState('BNB');
+const [advancedAgreed, setAdvancedAgreed] = useState(false);
+const [advancedBorrowBusy, setAdvancedBorrowBusy] = useState(false);
+const [advancedPositions, setAdvancedPositions] = useState([]);
+const [myAdvancedRequests, setMyAdvancedRequests] = useState([]);
+const [advancedNotice, setAdvancedNotice] = useState('');
+const [advancedDirection, setAdvancedDirection] = useState('Up');
+const advancedGoldLogo = 'https://cryptologos.cc/logos/tether-gold-xaut-logo.png?v=040';
+
+const advancedLoanProducts = [
+  { type: 'Flexible Rate Loan', asset: 'USDT', rate: '7.98%', logo: 'https://cryptologos.cc/logos/tether-usdt-logo.png?v=040' },
+  { type: 'Flexible Rate Loan', asset: 'USDC', rate: '6.50%', logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040' },
+  { type: 'Flexible Rate Loan', asset: 'XAU/USDT', rate: 'Gold', logo: advancedGoldLogo },
+  { type: 'Fixed Rate Loan', asset: 'USDT', rate: '5.06%', logo: 'https://cryptologos.cc/logos/tether-usdt-logo.png?v=040' },
+  { type: 'Fixed Rate Loan', asset: 'USDC', rate: '4.80%', logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040' },
+  { type: 'Fixed Rate Loan', asset: 'XAU/USDT', rate: 'Gold', logo: advancedGoldLogo },
+  { type: 'VIP Loan', asset: 'USDT', rate: '5.35%', logo: 'https://cryptologos.cc/logos/tether-usdt-logo.png?v=040' },
+  { type: 'VIP Loan', asset: 'XAU/USDT', rate: 'Gold', logo: advancedGoldLogo }
+];
+
+
+const advancedStakingProducts = [
+  { asset: 'ETH', name: 'Ethereum', rate: '3.20%', logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png?v=040' },
+  { asset: 'SOL', name: 'Solana', rate: '5.50%', logo: 'https://cryptologos.cc/logos/solana-sol-logo.png?v=040' }
+];
+
+const advancedAmountNumber = Number(advancedAmount) || 0;
+const advancedCollateralNumber = Number(advancedCollateral) || 0;
+
+const advancedMaxBorrow = advancedCollateralNumber * 0.10;
+
+const advancedLTV = advancedCollateralNumber > 0
+  ? (advancedAmountNumber / advancedCollateralNumber) * 100
+  : 0;
+const submitAdvancedBorrow = async () => {
+  if (!supabase || !authSession?.user?.id) {
+    setAdvancedNotice('Please sign in before submitting a borrow request');
+    return;
+  }
+
+  if (advancedBorrowBusy) return;
+
+  if (advancedAmountNumber < 1) {
+    setAdvancedNotice('Minimum  borrow amount is 1');
+    return;
+  }
+
+  if (advancedCollateralNumber <= 0) {
+    setAdvancedNotice('Enter collateral value');
+    return;
+  }
+
+  if (advancedAmountNumber > advancedMaxBorrow) {
+    setAdvancedNotice('Borrow amount exceeds the 10%  LTV limit');
+    return;
+  }
+
+  if (!advancedAgreed) {
+    setAdvancedNotice('Please accept the loan agreement');
+    return;
+  }
+
+  const selectedAsset = advancedSelection.split(' ')[1];
+  const borrowAsset = selectedAsset === 'XAU/USDT'
+    ? 'GOLD'
+    : selectedAsset;
+
+  const loanType = advancedSelection.replace(
+    `Borrow ${selectedAsset} `,
+    ''
+  );
+
+  const selectedProduct = advancedLoanProducts.find(
+    loan => loan.asset === selectedAsset && loan.type === loanType
+  );
+
+  if (!selectedProduct) {
+    setAdvancedNotice('Loan product not found');
+    return;
+  }
+
+  setAdvancedBorrowBusy(true);
+
+  try {
+    const { data, error } = await supabase
+      .from('advanced_requests')
+      .insert({
+        user_id: authSession.user.id,
+        user_email: authSession.user.email || '',
+        asset: borrowAsset,
+        amount: advancedAmountNumber,
+        collateral_asset: advancedCollateralAsset,
+        collateral_amount: advancedCollateralNumber,
+        status: 'Pending'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    setAdvancedNotice('Borrow request submitted. Waiting for Admin approval.');
+
+    setAdvancedAmount('');
+    setAdvancedCollateral('');
+    setAdvancedAgreed(false);
+
+  } catch (error) {
+    console.error('Borrow request failed:', error);
+    setAdvancedNotice('Borrow request failed: ' + error.message);
+  } finally {
+    setAdvancedBorrowBusy(false);
+  }
+};
+const [earnType, setEarnType] = useState('Flexible');
+const [earnCoin, setEarnCoin] = useState('USDT');
+const [showEarnSubscribe, setShowEarnSubscribe] = useState(false);
+const [earnAmount, setEarnAmount] = useState('');
+const [earnSearch, setEarnSearch] = useState('');
+const [earnFilter, setEarnFilter] = useState('All');
+
+
+const earnProducts = [
+  {
+    coin: 'USDT',
+    name: 'Tether',
+    logo: 'https://cryptologos.cc/logos/tether-usdt-logo.png?v=040',
+    flexible: 3.2,
+    locked: 5.1,
+    days: 30
+  },
+  {
+    coin: 'USDC',
+    name: 'USD Coin',
+    logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040',
+    flexible: 3.0,
+    locked: 4.8,
+    days: 30
+  },
+  {
+    coin: 'BTC',
+    name: 'Bitcoin',
+    logo: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=040',
+    flexible: 0.8,
+    locked: 1.5,
+    days: 60
+  },
+  {
+    coin: 'ETH',
+    name: 'Ethereum',
+    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png?v=040',
+    flexible: 1.2,
+    locked: 2.1,
+    days: 60
+  },
+  {
+    coin: 'SOL',
+    name: 'Solana',
+    logo: 'https://cryptologos.cc/logos/solana-sol-logo.png?v=040',
+    flexible: 2.4,
+    locked: 4.2,
+    days: 30
+  },
+  {
+    coin: 'XAU',
+    name: 'Gold',
+    logo: 'https://cryptologos.cc/logos/tether-gold-xaut-logo.png?v=040',
+    flexible: 2.0,
+    locked: 3.5,
+    days: 30,
+    pair: 'XAU.USDT'
+  }
+  
+];
+
+const selectedEarnProduct =
+  earnProducts.find(product => product.coin === earnCoin) || earnProducts[0];
+
+const selectedEarnApr =
+  earnType === 'Flexible'
+    ? selectedEarnProduct.flexible
+    : selectedEarnProduct.locked;
+
+const earnTotal = earnPositions.reduce(
+  (total, position) => total + position.amount,
+  0
+);
+
+const earnEstimatedIncome = earnPositions.reduce(
+  (total, position) =>
+    total + (position.amount * position.apr / 100 / 365),
+  0
+);
+
+
+
+
+const subscribeToEarn = () => {
+  const amountValue = Number(earnAmount);
+
+  if (!Number.isFinite(amountValue) || amountValue <= 0) {
+    return setToast('Please enter a valid USDT amount.');
+  }
+
+  const usdtPrice = Number(assetRates.USDT || 0);
+
+  if (usdtPrice <= 0) {
+    return setToast('USDT market price is unavailable.');
+  }
+
+  const valueInUSD = amountValue * usdtPrice;
+
+  if (valueInUSD < 10) {
+    return setToast('Minimum subscription is 10 USDT equivalent.');
+  }
+
+  if (amountValue > Number(balance || 0)) {
+    return setToast('Insufficient USDT Funding balance.');
+  }
+
+  const marketRate =
+    earnCoin === 'XAU'
+      ? Number(assetRates.GOLD || 0)
+      : earnCoin === 'USDT'
+        ? usdtPrice
+        : Number(assetRates[earnCoin] || 0);
+
+  if (!Number.isFinite(marketRate) || marketRate <= 0) {
+    return setToast(`${earnCoin} market price is unavailable.`);
+  }
+
+  const convertedAmount =
+    earnCoin === 'USDT'
+      ? amountValue
+      : valueInUSD / marketRate;
+
+  if (!Number.isFinite(convertedAmount) || convertedAmount <= 0) {
+    return setToast('Unable to calculate coin conversion.');
+  }
+
+  setBalance(current =>
+    Number(current || 0) - amountValue
+  );
+
+  const newPosition = {
+    id: Date.now(),
+    coin: earnCoin,
+    name: selectedEarnProduct.name,
+    amount: convertedAmount,
+    investedUSDT: amountValue,
+    entryPrice: marketRate,
+    type: earnType,
+    apr: selectedEarnApr,
+    days: earnType === 'Flexible' ? 0 : selectedEarnProduct.days,
+    createdAt: new Date().toLocaleString(),
+    status: 'Active',
+    fundsDeducted: true
+  };
+
+  setEarnPositions(current => [newPosition, ...current]);
+  setEarnAmount('');
+  setEarnTab('My Positions');
+
+  setToast(`${convertedAmount.toFixed(8)} ${earnCoin} subscribed successfully.`);
+};
+
+useEffect(() => {
+  try {
+    localStorage.setItem(
+      'igtrade-earn-positions',
+      JSON.stringify(earnPositions)
+    );
+  } catch (error) {
+    console.error('Could not save Earn positions:', error);
+  }
+}, [earnPositions]);
+
+
+const redeemEarnPosition = (positionId) => {
+  const position = earnPositions.find(
+    item => item.id === positionId
+  );
+
+  if (!position) {
+    return setToast('Earn position not found.');
+  }
+
+  const confirmed = window.confirm(
+    `Redeem ${position.amount} ${position.coin} from Earn?`
+  );
+
+  if (!confirmed) return;
+
+  // Return funds only for positions created with the new system
+  if (position.fundsDeducted === true) {
+    if (position.coin === 'USDT') {
+      setBalance(current =>
+        Number(current || 0) + Number(position.amount)
+      );
+    } else {
+      setCoinWallets(current => ({
+        ...current,
+        Funding: {
+          ...current.Funding,
+          [position.coin]:
+            Number(current.Funding?.[position.coin] || 0) +
+            Number(position.amount)
+        }
+      }));
+    }
+  }
+
+  setEarnPositions(current =>
+    current.filter(item => item.id !== positionId)
+  );
+
+  setToast(
+    `${position.amount} ${position.coin} redeemed successfully.`
+  );
+};
+
+
+const filteredEarnPositions = earnPositions.filter(position => {
+  const matchesSearch =
+    position.coin.toLowerCase().includes(earnSearch.toLowerCase()) ||
+    position.name.toLowerCase().includes(earnSearch.toLowerCase());
+
+  const matchesType =
+    earnFilter === 'All' || position.type === earnFilter;
+
+  return matchesSearch && matchesType;
+});
   const [marketFilter, setMarketFilter] = useState('All')
   const [selected, setSelected] = useState('BTC')
   const [selectedAsset, setSelectedAsset] = useState('BTC');
@@ -725,6 +1071,9 @@ const todaysPNL = useMemo(() => {
   const [withdrawAddress, setWithdrawAddress] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [requests, setRequests] = useState([])
+  const [advancedRequests, setAdvancedRequests] = useState([])
+const [advancedRequestsLoading, setAdvancedRequestsLoading] = useState(false)
+const [advancedReviewBusy, setAdvancedReviewBusy] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const [tradeSettingLoaded, setTradeSettingLoaded] = useState(false)
   const [tradeFullscreen, setTradeFullscreen] = useState(false);
@@ -823,6 +1172,47 @@ const setTradeEnabled = async (value) => {
   const [authName, setAuthName] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [authSession, setAuthSession] = useState(null)
+  useEffect(() => {
+  if (!supabase || !authSession?.user?.id) {
+    setMyAdvancedRequests([]);
+    return;
+  }
+
+  const loadMyAdvancedRequests = async () => {
+    const { data, error } = await supabase
+      .from('advanced_requests')
+      .select('*')
+      .eq('user_id', authSession.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Borrow history load error:', error);
+      return;
+    }
+
+    setMyAdvancedRequests(data || []);
+  };
+
+  loadMyAdvancedRequests();
+
+  const channel = supabase
+    .channel(`my-advanced-requests-${authSession.user.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'advanced_requests',
+        filter: `user_id=eq.${authSession.user.id}`
+      },
+      () => loadMyAdvancedRequests()
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [authSession?.user?.id]);
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [isAdmin, setIsAdmin] = useState(false)
@@ -832,6 +1222,97 @@ const setTradeEnabled = async (value) => {
   const [expandedTradeId, setExpandedTradeId] = useState(null)
   const [installPrompt, setInstallPrompt] = useState(null)
   const [members, setMembers] = useState([])
+  const loadAdvancedRequests = async () => {
+  if (!supabase || !isAdmin || !authSession?.user?.id) return
+
+  setAdvancedRequestsLoading(true)
+
+  const { data, error } = await supabase
+    .from('advanced_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Advanced requests loading failed:', error.message)
+    setToast('Could not load Borrow requests: ' + error.message)
+  } else {
+    setAdvancedRequests(data || [])
+  }
+
+  setAdvancedRequestsLoading(false)
+}
+
+useEffect(() => {
+  if (!supabase || !isAdmin || !authSession?.user?.id) {
+    setAdvancedRequests([])
+    return
+  }
+
+  loadAdvancedRequests()
+
+  const channel = supabase
+    .channel('advanced-borrow-requests-admin')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'advanced_requests'
+      },
+      () => {
+        loadAdvancedRequests()
+      }
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}, [isAdmin, authSession?.user?.id])
+useEffect(() => {
+  // তোমার আগের loadAdvancedRequests useEffect-এর কোড
+}, [isAdmin, authSession?.user?.id])
+
+// এখানে reviewAdvancedRequest বসবে
+const reviewAdvancedRequest = async (id, status, adminNote = '') => {
+  if (!supabase || !isAdmin || advancedReviewBusy) return
+
+  if (status === 'Rejected' && !String(adminNote).trim()) {
+    return setToast('Write a rejection reason first.')
+  }
+
+  setAdvancedReviewBusy(true)
+
+  try {
+    const { data, error } = await supabase.rpc(
+      'review_advanced_borrow_request',
+      {
+        p_request_id: id,
+        p_status: status,
+        p_admin_note: String(adminNote || '').trim()
+      }
+    )
+
+    if (error) throw error
+
+    if (!data?.success) {
+      throw new Error('Request review was not confirmed.')
+    }
+
+    await loadAdvancedRequests()
+
+    setToast(
+      status === 'Approved'
+        ? 'Borrow approved. Funding balance updated in Supabase.'
+        : 'Borrow request rejected.'
+    )
+  } catch (error) {
+    console.error('Borrow review failed:', error)
+    setToast('Borrow review failed: ' + error.message)
+  } finally {
+    setAdvancedReviewBusy(false)
+  }
+}
   const [memberEmail, setMemberEmail] = useState('')
   const [memberAmount, setMemberAmount] = useState('100')
   const [memberAction, setMemberAction] = useState('add')
@@ -1008,7 +1489,7 @@ if (!savedProfile) {
 };
 
 const assetRates = {
-  USDT: 1,
+  USDT: Number(livePrices.USDT?.price || 0),
   USDC: 1,
   BTC: btcPrice,
   ETH: ethPrice,
@@ -1524,18 +2005,19 @@ const refreshAccount = async () => {
     }
     connectCrypto()
 
-        const providerSymbols = {
-      AAPL: 'AAPL',
-      NVDA: 'NVDA',
-      TSLA: 'TSLA',
-      GBPUSD: 'GBP/USD',
-      EURUSD: 'EUR/USD',
-      USDJPY: 'USD/JPY',
-      SPX: 'SPX',
-      NDX: 'NDX',
-      DAX: 'DAX',
-      DJI: 'DJI'
-    }
+      const providerSymbols = {
+  USDT: 'USDT/USD',
+  AAPL: 'AAPL',
+  NVDA: 'NVDA',
+  TSLA: 'TSLA',
+  GBPUSD: 'GBP/USD',
+  EURUSD: 'EUR/USD',
+  USDJPY: 'USD/JPY',
+  SPX: 'SPX',
+  NDX: 'NDX',
+  DAX: 'DAX',
+  DJI: 'DJI'
+}
 
     let pricePollTimer
     let pricePollStopped = false
@@ -2409,7 +2891,10 @@ const saveWalletSettings = async (qrFiles) => {
   }
 
   if (isAdminRoute && authSession && isAdmin) {
-    return <div className="app-shell admin-only-shell"><main className="main-content" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}><div className="page-title"><div className="eyebrow">RESTRICTED AREA</div><h1>Admin controls</h1><p className="muted">Signed in as an authorized admin.</p><button className="btn btn-outline" onClick={async () => { await supabase?.auth.signOut(); setAuthSession(null); setIsAdmin(false); setAdminOpen(false); window.location.href = '/' }}>Sign out</button></div><AdminPanel adminOpen={true} setAdminOpen={() => { window.location.href = '/' }} tradeEnabled={tradeEnabled} setTradeEnabled={setTradeEnabled} requests={requests} approveRequest={approveRequest} memberEmail={memberEmail} setMemberEmail={setMemberEmail} memberAmount={memberAmount} setMemberAmount={setMemberAmount} memberAction={memberAction} setMemberAction={setMemberAction} adjustMemberBalance={adjustMemberBalance} members={members}
+    return <div className="app-shell admin-only-shell"><main className="main-content" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}><div className="page-title"><div className="eyebrow">RESTRICTED AREA</div><h1>Admin controls</h1><p className="muted">Signed in as an authorized admin.</p><button className="btn btn-outline" onClick={async () => { await supabase?.auth.signOut(); setAuthSession(null); setIsAdmin(false); setAdminOpen(false); window.location.href = '/' }}>Sign out</button></div><AdminPanel adminOpen={true} setAdminOpen={() => { window.location.href = '/' }} tradeEnabled={tradeEnabled} setTradeEnabled={setTradeEnabled} requests={requests} approveRequest={approveRequest} 
+    advancedRequests={advancedRequests}
+reviewAdvancedRequest={reviewAdvancedRequest}
+    memberEmail={memberEmail} setMemberEmail={setMemberEmail} memberAmount={memberAmount} setMemberAmount={setMemberAmount} memberAction={memberAction} setMemberAction={setMemberAction} adjustMemberBalance={adjustMemberBalance} members={members}
 walletAddresses={walletAddresses}
 setWalletAddresses={setWalletAddresses}
 walletQrCodes={walletQrCodes}
@@ -2477,9 +2962,57 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-caption">WORKSPACE</div>
-        {['Home', 'Trade', 'Deposit', 'Withdraw', 'Assets'].map((item, i) => <button key={item} onClick={() => setPage(item)} className={`nav-item ${page === item ? 'active' : ''}`}><span className="nav-icon">{['⌂', '↗', '↓', '↑', '◉'][i]}</span>{t(item)}</button>)}
-        <div className="side-spacer" />
-      </aside>
+        
+
+<div className="nav-menu">
+  {[
+    { name: 'Home' },
+    { name: 'Trade' },
+    { name: 'Deposit' },
+    { name: 'Assets' },
+    { name: 'Earn' }
+  ].map((item) => (
+    <button
+      key={item.name}
+      onClick={() => setPage(item.name)}
+      className={`nav-item ${page === item.name ? 'active' : ''}`}
+    >
+      <span className="nav-icon">
+        {item.name === 'Home' && (
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M3 10.5 12 3l9 7.5M5.5 9.5V21h13V9.5M9 21v-7h6v7" />
+          </svg>
+        )}
+        {item.name === 'Trade' && (
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M7 7h13l-3-3M17 17H4l3 3M20 7l-3-3M4 17l3 3" />
+          </svg>
+        )}
+        {item.name === 'Deposit' && (
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M12 3v13m-5-5 5 5 5-5M4 20h16" />
+          </svg>
+        )}
+        {item.name === 'Assets' && (
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="3" y="5" width="18" height="15" rx="2" />
+            <path d="M3 9h18M16 14h2" />
+          </svg>
+        )}
+        {item.name === 'Earn' && (
+          <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-7h6v7M9 10h6" />
+          </svg>
+        )}
+      </span>
+      {t(item.name)}
+    </button>
+  ))}
+</div>
+
+
+<div className="side-spacer" />
+</aside>
 
       <main className="main-content">
   <WithdrawalTicker />
@@ -2539,8 +3072,19 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
 </div>
 <div className="ticker-wrap"></div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade CFDs with the world’s No.1 provider1.</h1><p className="hero-subtitle"></p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div></div>
           <div className="ticker-wrap"><div className="ticker-track">{[...markets, ...markets].map((m, i) => <div className="ticker-item" key={`${m.symbol}-${i}`}><strong>{m.name}</strong><span>{quotePrice(m.price, m.symbol)}</span><small className={m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</small></div>)}</div></div>
-          <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2><p className="muted">Market crypto {marketConnection.crypto}; stocks, forex, indices and gold {marketConnection.other}IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG Group established in London in 1974, and is a constituent of the FTSE 250 index</p><p className="muted">Crypto {marketConnection.crypto}. Stocks/Gold {marketConnection.other}.IG International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
-          <div className="market-grid">{filterMarkets.map(m => <button key={m.symbol} className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`} onClick={() => { setSelected(m.symbol); setPage('Trade') }}><div className="coin-row"><MarketIcon symbol={m.symbol} /><span><strong>{m.pair}</strong><small>{m.name}</small></span><span className={`change ${m.change >= 0 ? 'positive' : 'negative'}`}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</span></div><div className="market-price">{quotePrice(m.price, m.symbol)}</div><div className="mini-spark"><svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline points={m.change >= 0 ? "0,25 12,20 24,23 38,9 52,15 65,7 78,13 91,4 105,8 120,2" : "0,4 12,8 24,3 38,13 52,9 65,20 78,14 91,23 105,18 120,27"} fill="none" stroke={m.change >= 0 ? '#45d3a1' : '#ff6b73'} strokeWidth="2" /></svg></div></button>)}</div>
+          <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
+          <div className="market-grid">{filterMarkets.map(m => <button key={m.symbol} className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`} onClick={() => { setSelected(m.symbol); setPage('Trade') }}><div className="coin-row">
+  <MarketIcon symbol={m.symbol} />
+
+  <span className="coin-info">
+    <strong>{m.pair}</strong>
+    <small>{m.name}</small>
+  </span>
+
+  <span className={`change ${m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}`}>
+    {m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}
+  </span>
+</div><div className="market-price">{quotePrice(m.price, m.symbol)}</div><div className="mini-spark"><svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline points={m.change >= 0 ? "0,25 12,20 24,23 38,9 52,15 65,7 78,13 91,4 105,8 120,2" : "0,4 12,8 24,3 38,13 52,9 65,20 78,14 91,23 105,18 120,27"} fill="none" stroke={m.change >= 0 ? '#45d3a1' : '#ff6b73'} strokeWidth="2" /></svg></div></button>)}</div>
           <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? 'Change since connection unavailable' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}</span></div></div><Candles
   Candles
   compact
@@ -2566,7 +3110,12 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
       </button>
     </div>
   )}
-        <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select"><MarketIcon symbol={asset.symbol} /><div><strong>{asset.pair}</strong><small>{asset.name}</small></div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">
+        <div className="trade-layout"><div className="panel trade-chart-panel"><div className="panel-head"><div className="asset-select">
+  <MarketIcon symbol={asset.symbol} />
+  <div className="asset-info">
+    <strong className="market-symbol">{asset.pair}</strong>
+    <small>{asset.name}</small>
+  </div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">
   {asset.symbol === 'XAU'
     ? ''
     : 'Live'}
@@ -2599,7 +3148,14 @@ setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />
 timeframe={chartTimeframe}
 onTimeframeChange={setChartTimeframe}
 />
-            {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">Remaining:{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div><div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Duration</small><strong>{trade.duration}s</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div>
+            {trade && <div className={`trade-result ${trade.done ? 'result-done' : ''}`}>{trade.awaitingDone && (
+  <button
+    className="btn btn-gold btn-full"
+    onClick={finishTrade}
+  >
+    REVIEW TRADE RESULT
+  </button>
+)}<div className="result-grid"><div><small>Asset</small><strong>{trade.assetName || trade.symbol}</strong></div><div><small>Direction</small><strong>{trade.direction}</strong></div><div><small>Duration</small><strong>{trade.duration}s</strong></div><div><small>Trade amount</small><strong>{money(trade.amount)}</strong></div><div><small>Opening price</small><strong>{quotePrice(trade.openPrice ?? trade.price, trade.symbol)}</strong></div><div><small>Target price</small><strong>{quotePrice(trade.targetPrice, trade.symbol)}</strong></div><div><small>Closing price</small><strong>{trade.endPrice == null ? 'Waiting for close' : quotePrice(trade.endPrice, trade.symbol)}</strong></div><div>
   <small>{!trade.done ? 'EXPECTED RESULT' : trade.profit < 0 ? 'LOSS' : 'PROFIT'}</small>
   <strong className={
     trade.done
@@ -2611,12 +3167,12 @@ onTimeframeChange={setChartTimeframe}
       : `Expected ±${money(trade.amount * trade.virtualRate)}`
     }
   </strong>
-</div><div><small>rate</small><strong className="gold-text">{Math.round(trade.virtualRate * 100)}%</strong></div></div><div className="trade-timestamps"><span>Opened: {trade.openTime || trade.startedAt}</span><span>{trade.closeTime ? `Closed: ${trade.closeTime}` : trade.awaitingDone ?'': 'Waiting for timer to finish.'}</span></div><Candles compact candles={trade.done || trade.awaitingDone ? (trade.endCandles || liveCandles[trade.symbol] || []) : (liveCandles[trade.symbol] || trade.startCandles || [])} targetPrice={trade.targetPrice} />{trade.awaitingDone && <button className="btn btn-gold btn-full" onClick={finishTrade}>Done — save trade to history</button>}{trade.done && <><p className="result-message">Saved to Profile → Trades with opening price, target price, closing price and chart snapshot.</p><button className="btn btn-gold" onClick={() => { setTrade(null); setRemaining(0) }}>Start another trade</button></>}</div>}
+</div><div><small>rate</small><strong className="gold-text">{Math.round(trade.virtualRate * 100)}%</strong></div></div><div className="trade-timestamps"><span>Opened: {trade.openTime || trade.startedAt}</span><span>{trade.closeTime ? `Closed: ${trade.closeTime}` : trade.awaitingDone ?'': 'Waiting for timer to finish.'}</span></div><Candles compact candles={trade.done || trade.awaitingDone ? (trade.endCandles || liveCandles[trade.symbol] || []) : (liveCandles[trade.symbol] || trade.startCandles || [])} targetPrice={trade.targetPrice} /><div className="result-top"><span className="eyebrow">{trade.done ? 'TRADE COMPLETED' : trade.awaitingDone ? 'REVIEW TRADE RESULT' : 'TRADE IN PROGRESS'}</span>{trade.done ? <span className="status-pill status-on">Saved ✓</span> : trade.awaitingDone ? <span className="status-pill status-on">Timer ended</span> : <span className="countdown">Remaining:{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</span>}</div>{trade.done && <><p className="result-message">Saved to Profile → Trades with opening price, target price, closing price and chart snapshot.</p><button className="btn btn-gold" onClick={() => { setTrade(null); setRemaining(0) }}>Start another trade</button></>}</div>}
           </div><div className="panel trade-controls"><div className="control-head"><h2>Place trade</h2><span className="tiny-tag">IG</span></div><div className="label-row"><label>Direction</label></div><div className="direction-row"><button className={`direction buy ${direction === 'BUY' ? 'direction-active' : ''}`} onClick={() => setDirection('BUY')}>↗ BUY</button><button className={`direction sell ${direction === 'SELL' ? 'direction-active' : ''}`} onClick={() => setDirection('SELL')}>↘ SELL</button></div><label className="field-label">Trade duration</label><div className="duration-options">{[30, 60, 120].map(d => <button key={d} className={duration === d ? 'duration-active' : ''} onClick={() => { setDuration(d); setAmount(d === 30 ? '100' : d === 60 ? '12000' : '35000') }}><strong>{d}s</strong><small>{d === 30 ? '20% rate' : d === 60 ? '40% rate' : '80% rate'}</small></button>)}</div><label className="field-label" htmlFor="amount">Amount (USDT)</label><div className="amount-input"><span>$</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} /></div><div className="amount-hint">{duration === 30 ? 'Amount range: $20 – $10,000' : duration === 60 ? '$12,000 – $30,000' : '$35,000 – $99,000'} · Account balance: {money(balance)}</div><button className="btn btn-gold btn-full btn-large"disabled={tradeStarting || !!(trade && !trade.done)}onClick={startTrade}
 >{tradeStarting ? 'Saving trade...' : !tradeEnabled ? 'Trading' : trade && !trade.done ? `Trade running · ${remaining}s` : 'Start trade'} <span>↗</span></button><p className="fine-print">IG trading platforms</p></div></div>
         </section>}
 
-        {page === 'Deposit' && <section className="page-section narrow-page"><div className="eyebrow">WALLET SERVICES</div><h1>Deposit <span className="gold-text">request</span></h1><p className="muted">Submit a request for review</p><div className="panel form-panel"><form onSubmit={submitDeposit}><label className="field-label">Select network</label><div className="network-options">{['TRC20', 'BTC', 'ETH'].map(n => <button type="button" key={n} className={depositMethod === n ? 'network-active' : ''} onClick={() => setDepositMethod(n)}><span className="network-symbol">{n === 'TRC20' ? '₮' : n === 'BTC' ? '₿' : '◆'}</span><strong>{n}</strong><small>{n === 'TRC20' ? 'USDT · Tron' : n === 'BTC' ? 'Bitcoin' : 'Ethereum'}</small></button>)}</div><label className="field-label">Deposit address</label>
+        {page === 'Deposit' && <section className="page-section narrow-page"><div className="eyebrow"></div><h1>Deposit <span className="gold-text">request</span></h1><p className="muted"></p><div className="panel form-panel"><form onSubmit={submitDeposit}><label className="field-label">Select network</label><div className="network-options">{['TRC20', 'BTC', 'ETH'].map(n => <button type="button" key={n} className={depositMethod === n ? 'network-active' : ''} onClick={() => setDepositMethod(n)}><span className="network-symbol">{n === 'TRC20' ? '₮' : n === 'BTC' ? '₿' : '◆'}</span><strong>{n}</strong><small>{n === 'TRC20' ? 'USDT · Tron' : n === 'BTC' ? 'Bitcoin' : 'Ethereum'}</small></button>)}</div><label className="field-label">Deposit address</label>
 
           <div className="copy-field">
             <span>
@@ -2842,18 +3398,30 @@ onTimeframeChange={setChartTimeframe}
       <button onClick={() => setPage('Deposit')}>
         <span>＋</span><small>Add funds</small>
       </button>
+      
       <button onClick={() => setPage('Withdraw')}>
         <span>↑</span><small>Send</small>
       </button>
+  
       <button onClick={() => setAssetsAction('Transfer')}>
         <span>⇄</span><small>Transfer</small>
       </button>
       <button onClick={() => setAssetsAction('Convert')}>
   <span>⇄</span><small>Convert</small>
 </button>
-     <button onClick={() => setAssetsAction('Earn')}>
-        <span>◇</span><small>Earn</small>
-      </button>
+     
+<button onClick={() => {
+  setAssetsAction('');
+  setPage('Earn');
+}}>
+  <span>◇</span><small>Earn</small>
+</button>
+<button onClick={() => {
+  setAssetsAction('');
+  setPage('Withdraw');
+}}>
+  <span>↑</span><small>Withdraw</small>
+</button>
     </div>
    {assetsAction === 'Transfer' && (
   <div className="panel form-panel">
@@ -3114,7 +3682,7 @@ setTransferAmount(String(available));
 
           <div>
             <strong>{coin}</strong>
-            <small>{wallet} Wallet · Available balance</small>
+            <small>{wallet}</small>
           </div>
         </div>
 
@@ -3338,10 +3906,825 @@ setTransferAmount(String(available));
 )}
 
 
+{page === 'Earn' && (
+  <section className="page-section ig-earn-page">
+    <div className="ig-earn-heading">
+      <div>
+        <div className="eyebrow">IGTRADE EARN</div>
+        <h1>Earn <span className="gold-text">Rewards</span></h1>
+        <p className="muted">
+        </p>
+      </div>
+      <span className="ig-earn-demo-label">EARN</span>
+    </div>
+
+    <div className="ig-earn-summary">
+  <div className="ig-earn-overview">
+    <div className="ig-earn-overview-header">
+      <span>Earn Overview</span>
+      <small></small>
+    </div>
+
+    <div className="ig-earn-balance">
+      <span>Total Earn Balance</span>
+      <strong>
+        {earnTotal.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })} <small>USDT</small>
+      </strong>
+    </div>
+
+    <div className="ig-earn-overview-stats">
+      <div>
+        <span>Estimated Daily Rewards</span>
+        <strong className="ig-earn-profit">
+          +{earnEstimatedIncome.toFixed(4)} USDT
+        </strong>
+      </div>
+
+      <div>
+        <span>Active Products</span>
+        <strong>{earnPositions.length}</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <div className="ig-earn-tabs">
+      {['Simple Earn', 'My Positions', 'Advanced'].map(tab => (
+        <button
+          key={tab}
+          type="button"
+          className={earnTab === tab ? 'active' : ''}
+          onClick={() => setEarnTab(tab)}
+        >
+          {tab}
+        </button>
+      ))}
+    </div>
+
+    {earnTab === 'Simple Earn' && (
+      <>
+        <div className="ig-earn-intro">
+          <div>
+            <h2>Simple Earn</h2>
+            <p className="muted">
+            </p>
+          </div>
+          <div className="ig-earn-type-tabs">
+            {['Flexible', 'Locked'].map(type => (
+              <button
+                key={type}
+                type="button"
+                className={earnType === type ? 'active' : ''}
+                onClick={() => setEarnType(type)}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        
+<div className="ig-earn-product-grid">
+  {earnProducts.map(product => {
+    const isSubscribed = earnPositions.some(
+      position => position.coin === product.coin
+    );
+
+    return (
+      <div
+        key={product.coin}
+        className={`ig-earn-product ${
+          earnCoin === product.coin ? 'selected' : ''
+        }`}
+      >
+        <button
+          type="button"
+          className="ig-earn-product-select"
+          onClick={() => setEarnCoin(product.coin)}
+        >
+          <span className="ig-earn-coin">
+            <img
+              src={product.logo}
+              alt={product.coin}
+              onError={e => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          </span>
+
+          <span className="ig-earn-product-name">
+            <strong>{product.coin}</strong>
+            <small>{product.name}</small>
+          </span>
+
+          <span className="ig-earn-product-apr">
+  <strong className="ig-earn-apr-green">
+    {(earnType === 'Flexible'
+      ? product.flexible
+      : product.locked).toFixed(2)}%
+  </strong>
+  <small className="ig-earn-apr-green">APR</small>
+          </span>
+        </button>
+
+        {isSubscribed ? (
+          <span className="ig-earn-subscribed">Subscribed</span>
+        ) : (
+          <button
+            type="button"
+            className="ig-earn-subscribe-btn"
+           onClick={() => {
+  setToast(`Subscribe clicked: ${product.coin}`);
+  setEarnCoin(product.coin);
+  setEarnAmount('');
+  setShowEarnSubscribe(true);
+}}
+          >
+            Subscribe
+          </button>
+        )}
+      </div>
+    );
+  })}
+</div>
+
+
+{showEarnSubscribe && (
+  <div className="ig-earn-subscribe panel">
+    <div className="ig-earn-subscribe-heading">
+      <div>
+        <div className="eyebrow">SUBSCRIPTION</div>
+        <h2>Subscribe to {earnCoin}</h2>
+        <p className="muted">
+          {selectedEarnProduct.name} · {earnType}
+        </p>
+      </div>
+
+      <div className="ig-earn-apr-box">
+        <strong>{selectedEarnApr.toFixed(2)}%</strong>
+        <small>Illustrative APR</small>
+      </div>
+    </div>
+
+    <div className="ig-earn-details">
+      <div>
+        <span>Product</span>
+        <strong>{earnType} {earnCoin}</strong>
+      </div>
+      <div>
+        <span>APR</span>
+        <strong>{selectedEarnApr.toFixed(2)}%</strong>
+      </div>
+      <div>
+        <span>Duration</span>
+        <strong>
+          {earnType === 'Flexible'
+            ? 'Flexible'
+            : `${selectedEarnProduct.days} days`}
+        </strong>
+      </div>
+      <div>
+        <span>Minimum</span>
+       <strong>10 USDT</strong>
+      </div>
+    </div>
+
+    <label className="field-label" htmlFor="ig-earn-amount">
+     Subscription amount (USDT)
+    </label>
+
+    
+<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+  <input
+    id="ig-earn-amount"
+    className="text-input"
+    type="number"
+    min="0"
+    step="any"
+    placeholder="Enter USDT amount"
+    value={earnAmount}
+    onChange={event => setEarnAmount(event.target.value)}
+    style={{ flex: 1, minWidth: 0 }}
+  />
+  <button
+    type="button"
+    className="btn btn-gold"
+    onClick={() => setEarnAmount(String(Number(balance || 0)))}
+  >
+    MAX
+  </button>
+</div>
+
+    
+
+<div className="ig-earn-estimate">
+  {(() => {
+    const usdtPrice = Number(assetRates.USDT || 0);
+    const marketRate = earnCoin === 'XAU'
+      ? Number(assetRates.GOLD || 0)
+      : earnCoin === 'USDT'
+        ? usdtPrice
+        : Number(assetRates[earnCoin] || 0);
+
+    const inputAmount = Number(earnAmount || 0);
+    const convertedAmount =
+      usdtPrice > 0 && marketRate > 0
+        ? inputAmount * usdtPrice / marketRate
+        : 0;
+
+    const daily = convertedAmount * selectedEarnApr / 100 / 365;
+    const monthly = daily * 30;
+    const yearly = daily * 365;
+
+    const rewardUSD = reward =>
+      usdtPrice > 0
+        ? (reward * marketRate / usdtPrice).toFixed(4)
+        : '—';
+
+    return (
+      <>
+        <span>Converted {earnCoin} Amount</span>
+        <strong>
+          {convertedAmount.toFixed(8)} {earnCoin}
+        </strong>
+
+        <span>Estimated Daily Reward</span>
+        <strong>+{daily.toFixed(8)} {earnCoin}</strong>
+        <small>USDT equivalent: {rewardUSD(daily)} USDT</small>
+
+        <span>Estimated Monthly Reward (30 days)</span>
+        <strong>+{monthly.toFixed(8)} {earnCoin}</strong>
+        <small>USDT equivalent: {rewardUSD(monthly)} USDT</small>
+
+        <span>Estimated Yearly Reward (365 days)</span>
+        <strong>+{yearly.toFixed(8)} {earnCoin}</strong>
+        <small>USDT equivalent: {rewardUSD(yearly)} USDT</small>
+      </>
+    );
+  })()}
+</div>
+
+
+    <button
+      type="button"
+      className="btn btn-gold btn-full"
+      onClick={subscribeToEarn}
+    >
+      Subscribe
+    </button>
+
+    <button
+      type="button"
+      className="ig-earn-redeem-btn"
+      onClick={() => setShowEarnSubscribe(false)}
+    >
+      Cancel
+    </button>
+
+    
+  </div>
+)}
+
+      </>
+    )}
+    {earnTab === 'My Positions' && (
+      <div className="panel ig-earn-positions">
+        <div className="ig-earn-intro">
+          <div>
+            <h2>My Earn Positions</h2>
+            <p className="muted">Your locally stored subscriptions</p>
+          </div>
+          <span className="ig-earn-demo-label">Subscriptions</span>
+        </div>
+
+        {earnPositions.length === 0 ? (
+          <div className="ig-earn-empty">
+            <div className="ig-earn-empty-icon">◇</div>
+            <h3>No active positions</h3>
+            <p className="muted">
+              Your subscriptions will appear here
+            </p>
+            <button
+              type="button"
+              className="btn btn-gold"
+              onClick={() => setEarnTab('Simple Earn')}
+            >
+              Explore Products
+            </button>
+          </div>
+      ) : (
+  <>
+  <div className="ig-earn-position-tools">
+  <input
+    className="text-input"
+    type="search"
+    placeholder="Search asset..."
+    value={earnSearch}
+    onChange={event => setEarnSearch(event.target.value)}
+  />
+
+  <select
+    className="text-input"
+    value={earnFilter}
+    onChange={event => setEarnFilter(event.target.value)}
+  >
+    <option value="All">All products</option>
+    <option value="Flexible">Flexible</option>
+    <option value="Locked">Locked</option>
+  </select>
+</div>
+
+<div className="ig-earn-table-wrap">
+  <table className="ig-earn-table">
+    <thead>
+      <tr>
+        <th>Asset</th>
+        <th>Type</th>
+        <th>Amount</th>
+        <th>APR</th>
+        <th>Duration</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {filteredEarnPositions.length === 0 ? (
+        <tr>
+          <td colSpan="7" className="ig-earn-no-results">
+            No matching positions found
+          </td>
+        </tr>
+      ) : (
+        filteredEarnPositions.map(position => (
+          <tr key={position.id}>
+            <td>
+              <strong>{position.coin}</strong>
+              <small>{position.name}</small>
+            </td>
+            <td>{position.type}</td>
+            <td>{position.amount.toLocaleString('en-US')}</td>
+            <td>{position.apr.toFixed(2)}%</td>
+            <td>
+              {position.days === 0
+                ? 'Flexible'
+                : `${position.days} days`}
+            </td>
+            <td>
+              <span className="ig-earn-status">
+  Active
+</span>
+            </td>
+            <td>
+              <button
+                type="button"
+                className="ig-earn-redeem-btn"
+                onClick={() => redeemEarnPosition(position.id)}
+              >
+                Redeem
+              </button>
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
+  </>
+        )}
+      </div>
+    )}
+
+    
+{earnTab === 'Advanced' && (
+  <div className="ig-advanced">
+
+    <div className="ig-advanced-heading">
+      <div>
+        <p>Explore yield, investment, staking and borrowing Coin</p>
+      </div>
+      {advancedSelection && (
+        <button
+          className="ig-advanced-back"
+          onClick={() => {
+            setAdvancedSelection('');
+            setAdvancedNotice('');
+            setAdvancedAmount('');
+            setAdvancedCollateral('');
+            setAdvancedAgreed(false);
+          }}
+        >
+          ← All Products
+        </button>
+      )}
+    </div>
+
+    {!advancedSelection && (
+      <>
+        <div className="ig-advanced-feature-grid">
+
+          <button className="ig-advanced-feature gold-feature"
+            onClick={() => setAdvancedSelection('Gold Yield')}>
+            <img src={advancedGoldLogo} alt="PAX Gold" />
+            <span className="ig-feature-tag">GOLD</span>
+            <h3>Gold Yield</h3>
+            <p>Explore illustrative yield opportunities linked to gold</p>
+            <strong>Explore Gold →</strong>
+          </button>
+
+          <button className="ig-advanced-feature dual-feature"
+            onClick={() => setAdvancedSelection('Dual Investment')}>
+            <span className="ig-feature-symbol">⇄</span>
+            <span className="ig-feature-tag">INVESTMENT</span>
+            <h3>Dual Investment</h3>
+            <p>Choose a target price and review a sample settlement</p>
+            <strong>Explore Dual Investment →</strong>
+          </button>
+
+          <button className="ig-advanced-feature staking-feature"
+            onClick={() => setAdvancedSelection('Staking')}>
+            <img src="https://cryptologos.cc/logos/ethereum-eth-logo.png?v=040" alt="Ethereum" />
+            <span className="ig-feature-tag">REWARDS</span>
+            <h3>Staking</h3>
+            <p>Review ETH and SOL staking examples and rewards</p>
+            <strong>Explore Staking →</strong>
+          </button>
+
+          <button className="ig-advanced-feature borrow-feature"
+            onClick={() => setAdvancedSelection('Borrow Assets')}>
+            
+<span className="ig-feature-symbol borrow-symbol">
+  <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="7" width="18" height="14" rx="2" />
+    <path d="M7 7V5a2 2 0 0 1 2-2h8M14 3h3v3M17 3l-5 5M15 14h3" />
+  </svg>
+</span>
+
+            <span className="ig-feature-tag">LOANS</span>
+            <h3>Borrow Assets</h3>
+            <p>Review flexible, fixed and VIP loan examples</p>
+            <strong>Explore Loans →</strong>
+          </button>
+
+        </div>
+
+        <div className="ig-advanced-summary">
+          <div>
+            <span>Products</span>
+            <strong>4</strong>
+          </div>
+          <div>
+            <span> Positions</span>
+            <strong>{advancedPositions.length}</strong>
+          </div>
+          <div>
+            <span>Account</span>
+            <strong></strong>
+          </div>
+        </div>
+      </>
+    )}
+
+    {advancedSelection === 'Gold Yield' && (
+      <div className="ig-advanced-panel">
+        <div className="ig-advanced-product-title">
+          <img src={advancedGoldLogo} alt="PAX Gold logo" />
+          <div>
+            <h3>Gold Yield</h3>
+            <p>Gold-linked illustrative yield product</p>
+          </div>
+          <span className="ig-product-label">GOLD</span>
+        </div>
+
+        <div className="ig-advanced-stats">
+          <div><span>APR</span><strong>3.50%</strong></div>
+          <div><span>Product</span><strong>Gold</strong></div>
+          <div><span>Term</span><strong>Flexible</strong></div>
+        </div>
+
+        <label className="ig-advanced-label">Investment Amount</label>
+        <div className="ig-advanced-input-wrap">
+          <input type="number" min="0" placeholder="Enter amount"
+            value={advancedAmount}
+            onChange={e => setAdvancedAmount(e.target.value)} />
+          <span>XAU/USDT</span>
+        </div>
+
+        <p className="ig-advanced-hint">Minimum amount: 0.01 PAXG</p>
+
+        <button className="ig-advanced-primary"
+          onClick={() => {
+            if (advancedAmountNumber < 0.01) {
+              setAdvancedNotice('Enter at least 0.01 PAXG');
+              return;
+            }
+            setAdvancedPositions(p => [...p, {
+              id: Date.now(), product: 'Gold Yield',
+              asset: 'XAU/USDT', amount: advancedAmount,
+              rate: '3.50%', status: 'Active'
+            }]);
+            setAdvancedNotice('Gold Yield position created successfully');
+            setAdvancedAmount('');
+          }}>
+          Subscribe to Gold Yield
+        </button>
+      </div>
+    )}
+
+    {advancedSelection === 'Dual Investment' && (
+      <div className="ig-advanced-panel">
+        <div className="ig-advanced-product-title">
+          <span className="ig-large-symbol">⇄</span>
+          <div>
+            <h3>Dual Investment</h3>
+            <p>Illustrative target-price investment</p>
+          </div>
+        </div>
+
+        <div className="ig-advanced-stats">
+          <div><span>APR</span><strong>8.00%</strong></div>
+          <div><span>Settlement</span><strong></strong></div>
+          <div><span>Duration</span><strong>7 Days</strong></div>
+        </div>
+
+        <label className="ig-advanced-label">Investment Direction</label>
+        <div className="ig-advanced-choice">
+          <button className={advancedDirection === 'Up' ? 'selected' : ''}
+            onClick={() => setAdvancedDirection('Up')}>Buy Low</button>
+          <button className={advancedDirection === 'Down' ? 'selected' : ''}
+            onClick={() => setAdvancedDirection('Down')}>Sell High</button>
+        </div>
+
+        <label className="ig-advanced-label">Investment Amount</label>
+        <div className="ig-advanced-input-wrap">
+          <input type="number" min="0" placeholder="Enter amount"
+            value={advancedAmount}
+            onChange={e => setAdvancedAmount(e.target.value)} />
+          <span>USDT</span>
+        </div>
+
+        <label className="ig-advanced-label">Target Price</label>
+        <div className="ig-advanced-input-wrap">
+          <input type="number" min="0" placeholder="Enter target price"
+            id="advanced-target-price" />
+          <span>USDT</span>
+        </div>
+
+        <div className="ig-advanced-info">
+          <span>Estimated APR</span><strong>8.00%</strong>
+          <span>Investment period</span><strong>7 Days</strong>
+        </div>
+
+        <button className="ig-advanced-primary"
+          onClick={() => {
+            const target = Number(document.getElementById('advanced-target-price')?.value);
+            if (advancedAmountNumber <= 0 || target <= 0) {
+              setAdvancedNotice('Enter a valid amount and target price');
+              return;
+            }
+            setAdvancedPositions(p => [...p, {
+              id: Date.now(), product: 'Dual Investment',
+              asset: 'USDT', amount: advancedAmount,
+              rate: '8.00%', status: 'Active'
+            }]);
+            setAdvancedNotice('Dual Investment position created successfully');
+            setAdvancedAmount('');
+          }}>
+          Confirm Investment
+        </button>
+      </div>
+    )}
+
+    {advancedSelection === 'Staking' && (
+      <div className="ig-advanced-panel">
+        <h3 className="ig-panel-heading">Staking Products</h3>
+        <p className="ig-panel-description">Select an asset</p>
+
+        <div className="ig-advanced-asset-list">
+          {advancedStakingProducts.map(product => (
+            <div className="ig-advanced-asset-row" key={product.asset}>
+              <div className="ig-advanced-asset-name">
+                <img src={product.logo} alt={product.name} />
+                <div><strong>{product.asset}</strong><small>{product.name}</small></div>
+              </div>
+              <div className="ig-advanced-rate">
+                <strong>{product.rate}</strong><small> APR</small>
+              </div>
+              <button onClick={() => {
+                setAdvancedAmount('');
+                setAdvancedSelection('Stake ' + product.asset);
+                setAdvancedNotice('');
+              }}>Stake</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {advancedSelection.startsWith('Stake ') && (
+      <div className="ig-advanced-panel">
+        <h3>Stake {advancedSelection.replace('Stake ', '')}</h3>
+        <p className="ig-panel-description">Create an illustrative staking position</p>
+
+        <div className="ig-advanced-stats">
+          <div><span>Asset</span><strong>{advancedSelection.replace('Stake ', '')}</strong></div>
+          <div><span> APR</span><strong>{advancedSelection.includes('ETH') ? '3.20%' : '5.50%'}</strong></div>
+          <div><span>Term</span><strong>Flexible</strong></div>
+        </div>
+
+        <label className="ig-advanced-label">Stake Amount</label>
+        <div className="ig-advanced-input-wrap">
+          <input type="number" min="0" placeholder="Enter amount"
+            value={advancedAmount}
+            onChange={e => setAdvancedAmount(e.target.value)} />
+          <span>{advancedSelection.replace('Stake ', '')}</span>
+        </div>
+
+        <button className="ig-advanced-primary"
+          onClick={() => {
+            if (advancedAmountNumber <= 0) {
+              setAdvancedNotice('Enter a valid staking amount');
+              return;
+            }
+            setAdvancedPositions(p => [...p, {
+              id: Date.now(), product: 'Staking',
+              asset: advancedSelection.replace('Stake ', ''),
+              amount: advancedAmount,
+              rate: advancedSelection.includes('ETH') ? '3.20%' : '5.50%',
+              status: 'Active'
+            }]);
+            setAdvancedNotice('Staking position created successfully');
+            setAdvancedAmount('');
+          }}>
+          Confirm Stake
+        </button>
+      </div>
+    )}
+
+    {advancedSelection === 'Borrow Assets' && (
+      <div className="ig-advanced-panel">
+        <h3 className="ig-panel-heading">Borrow Assets</h3>
+        <p className="ig-panel-description">Choose a loan</p>
+
+        {['Flexible Rate Loan', 'Fixed Rate Loan', 'VIP Loan'].map(group => (
+          <div className="ig-loan-group" key={group}>
+            <h4>{group}</h4>
+            {advancedLoanProducts.filter(loan => loan.type === group).map(loan => (
+              <div className="ig-advanced-asset-row" key={loan.type + loan.asset}>
+                <div className="ig-advanced-asset-name">
+                  <img src={loan.logo} alt={loan.asset} />
+                  <div><strong>{loan.asset}</strong><small>{loan.type}</small></div>
+                </div>
+                <div className="ig-advanced-rate">
+                  <strong>{loan.rate}</strong><small>Annualized Rate</small>
+                </div>
+                <button onClick={() => {
+                  setAdvancedAmount('');
+                  setAdvancedCollateral('');
+                  setAdvancedAgreed(false);
+                  setAdvancedSelection('Borrow ' + loan.asset + ' ' + loan.type);
+                  setAdvancedNotice('');
+                }}>Borrow</button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    )}
+
+    {advancedSelection.startsWith('Borrow ') && (
+      <div className="ig-advanced-panel">
+        <h3>{advancedSelection}</h3>
+        <p className="ig-panel-description">Review the loan details</p>
+
+        <div className="ig-advanced-stats">
+          <div><span>Annualized Interest</span><strong>7.98%</strong></div>
+          <div><span>Maximum LTV</span><strong>10%</strong></div>
+          <div><span>Minimum Amount</span><strong>1</strong></div>
+        </div>
+
+        <label className="ig-advanced-label">I want to borrow</label>
+        <div className="ig-advanced-input-wrap">
+          <input type="number" min="1" placeholder="Enter amount"
+            value={advancedAmount}
+            onChange={e => setAdvancedAmount(e.target.value)} />
+          <span>{advancedSelection.split(' ')[1]}</span>
+          <button onClick={() => setAdvancedAmount(String(advancedMaxBorrow))}>MAX</button>
+        </div>
+
+        <label className="ig-advanced-label">Collateral Asset</label>
+        <select className="ig-advanced-select"
+          value={advancedCollateralAsset}
+          onChange={e => setAdvancedCollateralAsset(e.target.value)}>
+          <option value="BNB">BNB</option>
+          <option value="BTC">BTC</option>
+          <option value="ETH">ETH</option>
+          <option value="USDT">USDT</option>
+        </select>
+
+        <label className="ig-advanced-label">Collateral Value (USDT equivalent)</label>
+        <div className="ig-advanced-input-wrap">
+          <input type="number" min="0" placeholder="Enter collateral value"
+            value={advancedCollateral}
+            onChange={e => setAdvancedCollateral(e.target.value)} />
+          <span>USDT</span>
+        </div>
+
+        <div className="ig-advanced-info">
+          <span>Maximum  Borrow</span><strong>{advancedMaxBorrow.toFixed(2)} USDT</strong>
+          <span>Current LTV</span><strong>{advancedLTV.toFixed(2)}%</strong>
+        </div>
+
+        {advancedLTV > 70 && (
+          <div className="ig-advanced-warning">
+            Your borrow amount is above the illustrative 10% LTV limit
+          </div>
+        )}
+
+        <label className="ig-advanced-agreement">
+          <input type="checkbox" checked={advancedAgreed}
+            onChange={e => setAdvancedAgreed(e.target.checked)} />
+        </label>
+
+       
+<button
+  className="ig-advanced-primary"
+  onClick={submitAdvancedBorrow}
+  disabled={advancedBorrowBusy}
+>
+  {advancedBorrowBusy ? 'Submitting...' : 'Submit Borrow Request'}
+</button>
+
+      </div>
+    )}
+
+    {advancedNotice && (
+      <div className="ig-advanced-notice">{advancedNotice}</div>
+    )}
+
+    {(advancedPositions.length > 0 || myAdvancedRequests.length > 0) && (
+  <div className="ig-advanced-panel ig-advanced-positions">
+    <h3>My Advanced Positions & Borrow History</h3>
+
+    {advancedPositions.map(position => (
+      <div className="ig-position-row" key={position.id}>
+        <div>
+          <strong>{position.product} · {position.asset}</strong>
+          <small>
+            {position.amount} {position.asset} · {position.rate} · {position.status}
+          </small>
+        </div>
+        <span></span>
+      </div>
+    ))}
+
+    {myAdvancedRequests.map(request => {
+      const status = request.status?.toLowerCase();
+      const statusClass =
+        status === 'approved' ? 'borrow-approved' :
+        status === 'rejected' ? 'borrow-rejected' :
+        'borrow-pending';
+
+      return (
+        <div className="ig-position-row" key={request.id}>
+          <div>
+            <strong>
+              Borrow · {request.asset === 'GOLD' ? 'XAU/USDT' : request.asset}
+            </strong>
+
+            <small>
+              Collateral: {request.collateral_amount} USDT equivalent
+              {' · '}
+              {request.collateral_asset}
+            </small>
+
+            <small className={`borrow-history-status ${statusClass}`}>
+              {request.status}
+            </small>
+          </div>
+
+          <strong className={`borrow-history-amount ${statusClass}`}>
+            {status === 'approved' ? '+' : status === 'rejected' ? '−' : ''}
+            {Number(request.amount).toLocaleString()} {request.asset}
+          </strong>
+        </div>
+      );
+    })}
+  </div>
+)}
+  </div>
+)}
+  </section>
+)}
+
         {isAdmin && authSession && adminOpen && <AdminPanel
           adminOpen={adminOpen} setAdminOpen={setAdminOpen}
           tradeEnabled={tradeEnabled} setTradeEnabled={setTradeEnabled}
           requests={requests} approveRequest={approveRequest}
+          advancedRequests={advancedRequests}
+reviewAdvancedRequest={reviewAdvancedRequest}
           memberEmail={memberEmail} setMemberEmail={setMemberEmail}
           memberAmount={memberAmount} setMemberAmount={setMemberAmount}
           memberAction={memberAction} setMemberAction={setMemberAction}
@@ -3360,8 +4743,54 @@ setTelegramUrl={setTelegramUrl}
 .</p>}</form>}</div></div>}
 
         {toast && <div className="toast"><span>✦</span>{toast}<button onClick={() => setToast('')}>×</button></div>}
-        <nav className="mobile-nav">{['Home', 'Trade', 'Deposit', 'Withdraw', 'Assets'].map((item, i) => <button key={item} onClick={() => setPage(item)} className={page === item ? 'mobile-active' : ''}><span>{['⌂', '↗', '↓', '↑', '◉'][i]}</span><small>{item}</small></button>)}</nav>
-        <footer className="footer"><div className="footer-brand"><span className="ig-square-logo">IG</span><span>© 1998 IGtrade</span></div><div className="footer-links"><a href="https://www.ig.com/en/terms-and-agreements" target="_blank" rel="noreferrer">Terms and agreements</a><a href="https://www.ig.com/en/privacy" target="_blank" rel="noreferrer">Privacy</a><a href="https://www.ig.com/en/fund-your-account" target="_blank" rel="noreferrer">How to fund</a><a href="https://www.ig.com/en/client-vulnerability" target="_blank" rel="noreferrer">Vulnerability</a><a href="https://www.ig.com/en/cookies" target="_blank" rel="noreferrer">Cookies</a><a href="https://www.ig.com/en/about-us" target="_blank" rel="noreferrer">About IG</a></div><div className="footer-social"><strong>Follow us online</strong><a href="https://www.facebook.com/IGInternational2" target="_blank" rel="noreferrer">Facebook</a><a href="https://twitter.com/IGInternational" target="_blank" rel="noreferrer">X</a><a href="https://www.youtube.com/channel/UCZj-ae-S_X-mocAH3xQnpUw" target="_blank" rel="noreferrer">YouTube</a><a href="https://www.linkedin.com/showcase/35901904/admin/" target="_blank" rel="noreferrer">LinkedIn</a></div><p className="footer-disclaimer">G International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc. IG International Limited receives services from other members of the IG Group including IG Markets Limited.</p>
+       
+
+<nav className="mobile-nav">
+  {['Home', 'Trade', 'Deposit', 'Assets', 'Earn'].map((item) => (
+    <button
+      key={item}
+      onClick={() => setPage(item)}
+      className={page === item ? 'mobile-active' : ''}
+    >
+      <span className="mobile-nav-icon">
+        {item === 'Home' && (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 10.5 12 3l9 7.5M5.5 9.5V21h13V9.5M9 21v-7h6v7" />
+          </svg>
+        )}
+
+        {item === 'Trade' && (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 7h13l-3-3M17 17H4l3 3" />
+          </svg>
+        )}
+
+        {item === 'Deposit' && (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3v13m-5-5 5 5 5-5M4 20h16" />
+          </svg>
+        )}
+
+        {item === 'Assets' && (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="5" width="18" height="15" rx="2" />
+            <path d="M3 9h18M16 14h2" />
+          </svg>
+        )}
+
+        {item === 'Earn' && (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-7h6v7M9 10h6" />
+          </svg>
+        )}
+      </span>
+      <small>{item}</small>
+    </button>
+  ))}
+</nav>
+
+
+        <footer className="footer"><div className="footer-brand"><span className="ig-square-logo">IG</span><span>© 1998 IGtrade</span></div><div className="footer-links"><a href="https://www.ig.com/en/terms-and-agreements" target="_blank" rel="noreferrer">Terms and agreements</a><a href="https://www.ig.com/en/privacy" target="_blank" rel="noreferrer">Privacy</a><a href="https://www.ig.com/en/fund-your-account" target="_blank" rel="noreferrer">How to fund</a><a href="https://www.ig.com/en/client-vulnerability" target="_blank" rel="noreferrer">Vulnerability</a><a href="https://www.ig.com/en/cookies" target="_blank" rel="noreferrer">Cookies</a><a href="https://www.ig.com/en/about-us" target="_blank" rel="noreferrer">About IG</a></div><div className="footer-social"><strong>Follow us online</strong><a href="https://www.facebook.com/IGInternational2" target="_blank" rel="noreferrer">Facebook</a><a href="https://twitter.com/IGInternational" target="_blank" rel="noreferrer">X</a><a href="https://www.youtube.com/channel/UCZj-ae-S_X-mocAH3xQnpUw" target="_blank" rel="noreferrer">YouTube</a><a href="https://www.linkedin.com/showcase/35901904/admin/" target="_blank" rel="noreferrer">LinkedIn</a></div><p className="footer-disclaimer">G International Limited is part of the IG Group and its ultimate parent company is IG Group Holdings Plc.</p>
            </footer>
         </main>
       </div>

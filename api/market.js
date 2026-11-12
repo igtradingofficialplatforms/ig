@@ -16,6 +16,7 @@ export default async function handler(req, res) {
 
   const allowedSymbols = [
     "XAU/USD",
+    "USDT/USD",
     "AAPL",
     "NVDA",
     "TSLA",
