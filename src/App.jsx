@@ -12,6 +12,7 @@ import AdminPanel from './Admin.jsx'
 import CustomerService from './CustomerService.jsx'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseConfig, isSupabaseConfigured } from './supabase.js'
+import MyProfile from './assets/MyProfile.jsx'
 
 const emailParts = [
   'j***5','a***8','m***3','r***7','s***2','d***9','k***4','n***6','t***1','p***14','fa***47','ale***87','gr***59',
@@ -666,8 +667,82 @@ function MarketIcon({ symbol }) {
 function App() {
   const [language, setLanguage] = useState(() => { try { return localStorage.getItem('igtrade-language') || 'en' } catch { return 'en' } })
   const t = (key) => uiTranslations[language]?.[key] || key
+ 
+const handlePasswordChange = async () => {
+  if (!supabase || !authSession?.user) {
+    setToast('Please sign in first.');
+    return;
+  }
+
+  if (!currentPassword) {
+    setToast('Please enter your current password.');
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    setToast('Password must be at least 6 characters.');
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    setToast('New passwords do not match.');
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    setToast('New password must be different.');
+    return;
+  }
+
+  setPasswordBusy(true);
+console.log('PASSWORD VALIDATION PASSED');
+  try {
+console.log('User email:', authSession?.user?.email);
+console.log('User phone:', authSession?.user?.phone);
+    const { error: verifyError } = await supabase.auth.signInWithPassword(
+      authSession.user.phone
+        ? {
+            phone: authSession.user.phone,
+            password: currentPassword
+          }
+        : {
+            email: authSession.user.email,
+            password: currentPassword
+          }
+    );
+    if (verifyError) {
+      throw new Error('Current password is incorrect.');
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      
+      password: newPassword
+    });
+    if (error) throw error;
+
+    setShowPasswordChange(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setToast('Password changed successfully.');
+
+  } catch (error) {
+    setToast(error.message);
+  } finally {
+    setPasswordBusy(false);
+  }
+};
+
   const [countryCode, setCountryCode] = useState('')
   const [page, setPage] = useState('Home')
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+const [currentPassword, setCurrentPassword] = useState('');
+const [newPassword, setNewPassword] = useState('');
+const [confirmPassword, setConfirmPassword] = useState('');
+const [showNewPassword, setShowNewPassword] = useState(false);
+const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+const [passwordBusy, setPasswordBusy] = useState(false);
   const [earnPositions, setEarnPositions] = useState(() => {
   try {
     return JSON.parse(
@@ -1017,6 +1092,7 @@ const filteredEarnPositions = earnPositions.filter(position => {
   const [selected, setSelected] = useState('BTC')
   const [selectedAsset, setSelectedAsset] = useState('BTC');
   const [assetsWalletTab, setAssetsWalletTab] = useState('Spot');
+  const [selectedAssetWallet, setSelectedAssetWallet] = useState('Spot');
   const [assetsAction, setAssetsAction] = useState('');
 const [transferFrom, setTransferFrom] = useState('Spot');
 const [transferTo, setTransferTo] = useState('Funding');
@@ -1168,6 +1244,8 @@ const setTradeEnabled = async (value) => {
   const [authMode, setAuthMode] = useState('login')
   const [authIdentifier, setAuthIdentifier] = useState('')
   const [authPassword, setAuthPassword] = useState('')
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
+const [showAuthConfirm, setShowAuthConfirm] = useState(false);
   const [authConfirm, setAuthConfirm] = useState('')
   const [authName, setAuthName] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
@@ -1317,11 +1395,40 @@ const reviewAdvancedRequest = async (id, status, adminNote = '') => {
   const [memberAmount, setMemberAmount] = useState('100')
   const [memberAction, setMemberAction] = useState('add')
   const [walletAddresses, setWalletAddresses] = useState({ TRC20: '', BTC: '', ETH: '' })
-const [walletQrCodes, setWalletQrCodes] = useState({
+  const [walletQrCodes, setWalletQrCodes] = useState({
   TRC20: '',
   BTC: '',
   ETH: ''
 });
+useEffect(() => {
+  const loadSavedWalletAddresses = async () => {
+    const userId = authSession?.user?.id
+
+    if (!supabase || !userId) return
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('trc20_address, btc_address, eth_address')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Address loading failed:', error.message)
+      return
+    }
+
+    const saved = {
+      TRC20: data?.trc20_address || '',
+      BTC: data?.btc_address || '',
+      ETH: data?.eth_address || ''
+    }
+
+    setWalletAddresses(saved)
+    setWithdrawAddress(saved[withdrawMethod] || '')
+  }
+
+  loadSavedWalletAddresses()
+}, [authSession?.user?.id])
   useEffect(() => {
     if (!supabase) return;
 
@@ -3295,7 +3402,10 @@ onTimeframeChange={setChartTimeframe}
                       type="button"
                       key={n}
                       className={withdrawMethod === n ? 'network-active' : ''}
-                      onClick={() => setWithdrawMethod(n)}
+                      onClick={() => {
+  setWithdrawMethod(n)
+  setWithdrawAddress(walletAddresses[n] || '')
+}}
                     >
                       <span className="network-symbol">
                         {n === 'TRC20' ? '₮' : n === 'BTC' ? '₿' : '◆'}
@@ -3316,13 +3426,17 @@ onTimeframeChange={setChartTimeframe}
                   Destination wallet address
                 </label>
                 <input
-                  className="text-input"
-                  id="withdraw-address"
-                  value={withdrawAddress}
-                  onChange={e => setWithdrawAddress(e.target.value)}
-                  placeholder="Paste wallet address"
-                  required
-                />
+  className="text-input"
+  id="withdraw-address"
+  value={withdrawAddress}
+  onChange={e => setWithdrawAddress(e.target.value)}
+  placeholder={
+    walletAddresses[withdrawMethod]
+      ? 'Saved address loaded'
+      : 'No saved address. Add one in My Profile'
+  }
+  required
+/>
 
                 <label className="field-label" htmlFor="withdraw-amount">
                   Amount (USDT)
@@ -3624,7 +3738,81 @@ setTransferAmount(String(available));
         </button>
       </div>
 
-     
+     {selectedAsset ? (
+  <div className="coin-details">
+    <div className="coin-details-header">
+      <button
+        type="button"
+        onClick={() => setSelectedAsset('')}
+      >
+        ← Back
+      </button>
+      <span>{selectedAssetWallet} Wallet</span>
+    </div>
+
+    <div className="coin-details-balance">
+  <div className="coin-balance-title">
+    <span className={`coin-logo coin-${selectedAsset.toLowerCase()}`}>
+      {selectedAsset === 'USDT' ? '₮' :
+       selectedAsset === 'BTC' ? '₿' :
+       selectedAsset === 'ETH' ? '◆' :
+       selectedAsset === 'SOL' ? '◎' :
+       selectedAsset === 'USDC' ? '$' :
+       selectedAsset === 'EUR' ? '€' : 'Au'}
+    </span>
+    <small>{selectedAsset} Balance</small>
+  </div>
+      <h2>
+        {getWalletBalance(selectedAssetWallet, selectedAsset).toLocaleString('en-US', {
+          maximumFractionDigits: 8
+        })} {selectedAsset}
+      </h2>
+      <p>
+        ≈ {money(
+          getWalletBalance(selectedAssetWallet, selectedAsset) *
+          Number(assetRates[selectedAsset] || 0)
+        )} USD
+      </p>
+    </div>
+
+    <div className="coin-market-grid">
+      {[
+        { key: 'BTC', label: 'BTC/USDT' },
+        { key: 'XAU', label: 'XAU/USD' },
+        { key: 'ETH', label: 'ETH/USDT' }
+      ].map(item => {
+        const market = livePrices[item.key] || {};
+        const change = Number(market.change || 0);
+
+        return (
+          <div className="coin-market-card" key={item.key}>
+            <small>{item.label}</small>
+            <strong>{Number(market.price || 0).toLocaleString('en-US')}</strong>
+            <span style={{
+              color: change > 0 ? '#0ecb81' : change < 0 ? '#f6465d' : 'inherit'
+            }}>
+              {change > 0 ? '+' : ''}{change.toFixed(3)}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+
+   <div className="coin-details-actions">
+  <button onClick={() => setAssetsAction('Deposit')}>
+    <span>＋</span> Add USDT
+  </button>
+
+  <button onClick={() => setAssetsAction('Withdraw')}>
+    <span>↑</span> Send
+  </button>
+
+  <button onClick={() => setAssetsAction('Transfer')}>
+    <span>⇄</span> Transfer
+  </button>
+</div>
+  </div>
+) : (
 
 <div className="assets-coin-list">
   {['USDT', 'BTC', 'ETH', 'SOL', 'USDC', 'EUR', 'GOLD'].map(coin => {
@@ -3648,8 +3836,16 @@ setTransferAmount(String(available));
       GOLD: 'gold'
     };
 
-    return (
-      <div className="assets-balance-row" key={coin}>
+   return (
+  <button
+    type="button"
+    className="assets-balance-row"
+    key={coin}
+    onClick={() => {
+      setSelectedAsset(coin);
+      setSelectedAssetWallet(wallet);
+    }}
+  >
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -3707,13 +3903,15 @@ setTransferAmount(String(available));
             {change.toFixed(3)}%
           </small>
         </div>
-      </div>
+           </button>
     );
   })}
 </div>
+)}
+
 </div>
 
-    <div className="stat-grid">
+<div className="stat-grid">
       <div className="panel stat-card">
         <small>Account balance</small>
         <strong>{money(balance)}</strong>
@@ -3870,24 +4068,32 @@ setTransferAmount(String(available));
             authSession?.user?.phone ||
             'IGtrade Official Platforms Account'}
         </h2>
+{authSession?.user ? (
+  <>
+    <button
+      className="btn btn-outline"
+      onClick={() => setShowPasswordChange(true)}
+    >
+      Change Password
+    </button>
 
-        {authSession?.user ? (
-          <button
-            className="btn btn-outline"
-            onClick={async () => {
-              const { error } = await supabase.auth.signOut();
-              if (error) return setToast(error.message);
-              setAuthSession(null);
-              setProfileName('');
-              setProfileEmail('');
-              setIsAdmin(false);
-              setToast('Signed out successfully.');
-            }}
-          >
-            Sign out
-          </button>
-        ) : (
-          <button
+    <button
+      className="btn btn-outline"
+      onClick={async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) return setToast(error.message);
+        setAuthSession(null);
+        setProfileName('');
+        setProfileEmail('');
+        setIsAdmin(false);
+        setToast('Signed out successfully.');
+      }}
+    >
+      Sign out
+    </button>
+  </>
+) : (
+  <button
             className="btn btn-outline"
             onClick={() => {
               setAuthMode('login');
@@ -3902,6 +4108,154 @@ setTransferAmount(String(available));
         <span className="status-pill status-on">IGtrade Account</span>
       </div>
     </div>
+<div className="panel assets-profile-card">
+  <button
+    type="button"
+    className="assets-profile-button"
+    onClick={() => setAssetsAction('MyProfile')}
+  >
+    <span className="assets-profile-icon">♙</span>
+
+    <span className="assets-profile-text">
+      <strong>My Profile</strong>
+      <small>Manage your personal information</small>
+    </span>
+
+    <span className="assets-profile-arrow">›</span>
+  </button>
+</div>
+
+
+{assetsAction === 'MyProfile' && (
+  <div className="myprofile-popup-overlay">
+    <div className="myprofile-popup">
+      <div className="myprofile-popup-header">
+        <div className="myprofile-popup-title">
+          <span className="myprofile-popup-logo">♙</span>
+          <div>
+            <h2>My Profile</h2>
+            <p>Manage your personal information</p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="myprofile-popup-close"
+          onClick={() => setAssetsAction('')}
+          aria-label="Close profile"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="myprofile-popup-content">
+        <MyProfile
+          session={authSession}
+          supabase={supabase}
+        />
+      </div>
+    </div>
+  </div>
+)}
+
+{showPasswordChange && (
+  <div className="password-modal-overlay">
+    <div className="password-modal panel">
+      <div className="section-heading">
+        <div>
+          <div className="eyebrow">ACCOUNT SECURITY</div>
+          <div className="password-security-icon">
+  <span>♙</span>
+</div>
+<h2>Change Password</h2>
+<p className="muted">Protect your account with a new password</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowPasswordChange(false)}
+        >
+          ✕
+        </button>
+      </div>
+<label className="field-label">Current Password</label>
+
+<div className="password-input-wrap">
+  <input
+    className="text-input"
+    type={showCurrentPassword ? 'text' : 'password'}
+    value={currentPassword}
+    onChange={e => setCurrentPassword(e.target.value)}
+    placeholder="Enter current password"
+  />
+<small className="password-hint">Enter your current password</small>
+  <button
+    type="button"
+    className="password-eye-btn"
+    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+  >
+    {showCurrentPassword ? '🙈' : '👁'}
+  </button>
+</div>
+     <label className="field-label">New Password</label>
+
+<div className="password-input-wrap">
+  <input
+    className="text-input"
+    type={showNewPassword ? 'text' : 'password'}
+    value={newPassword}
+    onChange={e => setNewPassword(e.target.value)}
+    placeholder="Enter new password"
+  />
+<small className="password-hint">Minimum 6 characters</small>
+  <button
+    type="button"
+    className="password-eye-btn"
+    onClick={() => setShowNewPassword(!showNewPassword)}
+  >
+    {showNewPassword ? '🙈' : '👁'}
+  </button>
+</div>
+
+      <label className="field-label">Confirm New Password</label>
+
+<div className="password-input-wrap">
+  <input
+    className="text-input"
+    type={showConfirmPassword ? 'text' : 'password'}
+    value={confirmPassword}
+    onChange={e => setConfirmPassword(e.target.value)}
+    placeholder="Confirm new password"
+  />
+<small className="password-hint">Re-enter your new password (minimum 6 characters)</small>
+  <button
+    type="button"
+    className="password-eye-btn"
+    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+  >
+    {showConfirmPassword ? '🙈' : '👁'}
+  </button>
+</div>
+
+      <button
+        type="button"
+        className="btn btn-gold btn-full"
+        disabled={passwordBusy}
+        onClick={handlePasswordChange}
+      >
+        {passwordBusy ? 'Updating...' : 'Update Password'}
+      </button>
+
+      <button
+        type="button"
+        className="btn btn-outline btn-full"
+        onClick={() => setShowPasswordChange(false)}
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
   </section>
 )}
 
@@ -4738,7 +5092,41 @@ telegramUrl={telegramUrl}
 setTelegramUrl={setTelegramUrl}
         />}
 
-        {loginOpen && <div className="modal-backdrop" onClick={() => { if (!isAdminRoute) setLoginOpen(false) }}><div className="modal panel" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => { if (!isAdminRoute) setLoginOpen(false) }} aria-label="Close">×</button><Logo /><h2>{isAdminRoute ? (isAdmin ? 'Admin Panel' : 'Admin sign in') : (authMode === 'register' ? 'Create your IGtrade account' : 'Welcome to IGtrade')}</h2><p className="muted">{isAdminRoute ? 'Only an account approved as admin can continue.' : (authMode === 'register' ? 'Register using your email address or phone number.' : 'Sign in using your email address or phone number.')}</p>{isAdminRoute && isAdmin ? <><p className="fine-print">Admin access verified.</p><button className="btn btn-gold btn-full" onClick={() => { setLoginOpen(false); setAdminOpen(true) }}>Open Admin Panel</button></> : <form onSubmit={handleAuthSubmit}>{!isAdminRoute && <div className="history-tabs" style={{ display: 'flex', width: '100%', gap: 8, marginTop: 16 }}><button type="button" className={authMode === 'login' ? 'selected' : ''} onClick={() => setAuthMode('login')} style={{ flex: 1 }}>Sign in</button><button type="button" className={authMode === 'register' ? 'selected' : ''} onClick={() => setAuthMode('register')} style={{ flex: 1 }}>Register</button></div>}{authMode === 'register' && !isAdminRoute && <><label className="field-label">{t('Full name')}</label><input className="text-input" value={authName} onChange={e => setAuthName(e.target.value)} placeholder={t('Full name')} autoComplete="name" required /></>}<label className="field-label">{t('Email or phone')}</label><div className="phone-entry-row"><select className="text-input country-code-select" aria-label="Country code" value={countryCode} onChange={e => setCountryCode(e.target.value)}><option value="">{t('Country code')}</option>{countryCallingCodes.map(([iso, country, code]) => <option key={iso} value={code}>{country} ({code})</option>)}</select><input className="text-input phone-number-input" value={authIdentifier} onChange={e => setAuthIdentifier(e.target.value)} placeholder={t('Phone number') + ' / email'} autoComplete="username" required /></div><label className="field-label">{t('Password')}</label><input className="text-input" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="At least 6 characters" autoComplete={authMode === 'register' ? 'new-password' : 'current-password'} required />{authMode === 'register' && !isAdminRoute && <><label className="field-label">{t('Confirm password')}</label><input className="text-input" type="password" value={authConfirm} onChange={e => setAuthConfirm(e.target.value)} placeholder="Repeat password" autoComplete="new-password" required /></>}<button className="btn btn-gold btn-full" type="submit" disabled={authBusy}>{authBusy ? 'Please wait…' : (authMode === 'register' && !isAdminRoute ? 'Create account' : t('Continue'))}</button>{!isAdminRoute && authMode === 'login' && <button type="button" className="text-button" onClick={async () => { if (!supabase) return setToast('Connect Supabase first to reset a password.'); if (!authIdentifier.includes('@')) return setToast('Password reset currently requires the email address.'); const { error } = await supabase.auth.resetPasswordForEmail(authIdentifier.trim()); setToast(error ? error.message : 'Password reset email sent if the account exists.') }}>Forgot password?</button>}{!supabase && <p className="fine-print">Warning: only tick this box if you are using a trusted computer
+        {loginOpen && <div className="modal-backdrop" onClick={() => { if (!isAdminRoute) setLoginOpen(false) }}><div className="modal panel" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => { if (!isAdminRoute) setLoginOpen(false) }} aria-label="Close">×</button><Logo /><h2>{isAdminRoute ? (isAdmin ? 'Admin Panel' : 'Admin sign in') : (authMode === 'register' ? 'Create your IGtrade account' : 'Welcome to IGtrade')}</h2><p className="muted">{isAdminRoute ? 'Only an account approved as admin can continue.' : (authMode === 'register' ? 'Register using your email address or phone number.' : 'Sign in using your email address or phone number.')}</p>{isAdminRoute && isAdmin ? <><p className="fine-print">Admin access verified.</p><button className="btn btn-gold btn-full" onClick={() => { setLoginOpen(false); setAdminOpen(true) }}>Open Admin Panel</button></> : <form onSubmit={handleAuthSubmit}>{!isAdminRoute && <div className="history-tabs" style={{ display: 'flex', width: '100%', gap: 8, marginTop: 16 }}><button type="button" className={authMode === 'login' ? 'selected' : ''} onClick={() => setAuthMode('login')} style={{ flex: 1 }}>Sign in</button><button type="button" className={authMode === 'register' ? 'selected' : ''} onClick={() => setAuthMode('register')} style={{ flex: 1 }}>Register</button></div>}{authMode === 'register' && !isAdminRoute && <><label className="field-label">{t('Full name')}</label><input className="text-input" value={authName} onChange={e => setAuthName(e.target.value)} placeholder={t('Full name')} autoComplete="name" required /></>}<label className="field-label">{t('Email or phone')}</label><div className="phone-entry-row"><select className="text-input country-code-select" aria-label="Country code" value={countryCode} onChange={e => setCountryCode(e.target.value)}><option value="">{t('Country code')}</option>{countryCallingCodes.map(([iso, country, code]) => <option key={iso} value={code}>{country} ({code})</option>)}</select><input className="text-input phone-number-input" value={authIdentifier} onChange={e => setAuthIdentifier(e.target.value)} placeholder={t('Phone number') + ' / email'} autoComplete="username" required /></div><label className="field-label">{t('Password')}</label><div className="password-input-wrap">
+  <input
+    className="text-input"
+    type={showAuthPassword ? 'text' : 'password'}
+    value={authPassword}
+    onChange={e => setAuthPassword(e.target.value)}
+    placeholder="At least 6 characters"
+    autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
+    required
+  />
+  <button
+    type="button"
+    className="password-eye-btn"
+    onClick={() => setShowAuthPassword(!showAuthPassword)}
+  >
+    {showAuthPassword ? '🙈' : '👁'}
+  </button>
+</div>{authMode === 'register' && !isAdminRoute && <><label className="field-label">{t('Confirm password')}</label><div className="password-input-wrap">
+  <input
+    className="text-input"
+    type={showAuthConfirm ? 'text' : 'password'}
+    value={authConfirm}
+    onChange={e => setAuthConfirm(e.target.value)}
+    placeholder="Repeat password"
+    autoComplete="new-password"
+    required
+  />
+  <button
+    type="button"
+    className="password-eye-btn"
+    onClick={() => setShowAuthConfirm(!showAuthConfirm)}
+  >
+    {showAuthConfirm ? '🙈' : '👁'}
+  </button>
+</div></>}<button className="btn btn-gold btn-full" type="submit" disabled={authBusy}>{authBusy ? 'Please wait…' : (authMode === 'register' && !isAdminRoute ? 'Create account' : t('Continue'))}</button>{!isAdminRoute && authMode === 'login' && <button type="button" className="text-button" onClick={async () => { if (!supabase) return setToast('Connect Supabase first to reset a password.'); if (!authIdentifier.includes('@')) return setToast('Password reset currently requires the email address.'); const { error } = await supabase.auth.resetPasswordForEmail(authIdentifier.trim()); setToast(error ? error.message : 'Password reset email sent if the account exists.') }}>Forgot password?</button>}{!supabase && <p className="fine-print">Warning: only tick this box if you are using a trusted computer
 
 .</p>}</form>}</div></div>}
 
