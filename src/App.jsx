@@ -59,7 +59,16 @@ function WithdrawalTicker() {
   );
 }
 
-const supabase = isSupabaseConfigured ? createClient(supabaseConfig.url, supabaseConfig.anonKey) : null
+const supabase = isSupabaseConfigured
+  ? createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage
+      }
+    })
+  : null
 console.log('Supabase URL loaded:', Boolean(import.meta.env.VITE_SUPABASE_URL))
 console.log('Supabase key loaded:', Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY))
 console.log('Supabase configured:', isSupabaseConfigured)
@@ -568,7 +577,268 @@ const uiTranslations = {
   tr: { Home: 'Ana sayfa', Trade: 'İşlem', Deposit: 'Para yatır', Withdraw: 'Para çek', Profile: 'Profil', 'Sign in': 'Giriş yap', Register: 'Kayıt ol', 'Install App': 'Uygulamayı yükle', 'Email or phone': 'E-posta veya telefon', 'Full name': 'Ad soyad', Password: 'Şifre', 'Confirm password': 'Şifreyi onayla', 'Create account': 'Hesap oluştur', Continue: 'Devam et', 'Select language': 'Dil seçin', 'Phone number': 'Telefon numarası', 'Country code': 'Ülke kodu', 'Available funds': 'Kullanılabilir bakiye', 'Account balance': 'Hesap bakiyesi', 'Deposit request': 'Para yatırma talebi', Trades: 'İşlemler', Deposits: 'Para yatırma', Withdrawals: 'Para çekme' }
 }
 
+Object.assign(uiTranslations, {
+  en: {
+    'Create Your Account': 'Create Your Account',
+    'Register or sign in to access IG Trade.': 'Register or sign in to access IG Trade.',
+    'Email Address': 'Email Address',
+    'Enter your email address': 'Enter your email address',
+    'Please enter your valid email address': 'Please enter your valid email address',
+    'Full name': 'Full name',
+    'Enter your full name': 'Enter your full name',
+    Password: 'Password',
+    'Enter your password': 'Enter your password',
+    'Password must be at least 6 characters': 'Password must be at least 6 characters',
+    'Confirm Password': 'Confirm Password',
+    'Re-enter your password to confirm': 'Re-enter your password to confirm',
+    'Please wait...': 'Please wait...',
+    'Create Account': 'Create Account',
+    'Sign in to your account': 'Sign in to your account',
+    'Enter your registered email and password': 'Enter your registered email and password'
+  },
+  bn: {
+    'Create Your Account': 'আপনার অ্যাকাউন্ট তৈরি করুন',
+    'Register or sign in to access IG Trade.': 'IG Trade ব্যবহার করতে নিবন্ধন করুন অথবা লগইন করুন।',
+    'Email Address': 'ইমেইল ঠিকানা',
+    'Enter your email address': 'আপনার ইমেইল ঠিকানা লিখুন',
+    'Please enter your valid email address': 'সঠিক ইমেইল ঠিকানা লিখুন',
+    'Full name': 'পূর্ণ নাম',
+    'Enter your full name': 'আপনার সম্পূর্ণ নাম লিখুন',
+    Password: 'পাসওয়ার্ড',
+    'Enter your password': 'আপনার পাসওয়ার্ড লিখুন',
+    'Password must be at least 6 characters': 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে',
+    'Confirm Password': 'পাসওয়ার্ড নিশ্চিত করুন',
+    'Re-enter your password to confirm': 'নিশ্চিত করতে পাসওয়ার্ড আবার লিখুন',
+    'Please wait...': 'অপেক্ষা করুন...',
+    'Create Account': 'অ্যাকাউন্ট তৈরি করুন',
+    'Sign in to your account': 'আপনার অ্যাকাউন্টে লগইন করুন',
+    'Enter your registered email and password': 'আপনার নিবন্ধিত ইমেইল ও পাসওয়ার্ড লিখুন'
+  },
+  ar: {
+    'Create Your Account': 'أنشئ حسابك',
+    'Register or sign in to access IG Trade.': 'سجّل أو سجّل الدخول للوصول إلى IG Trade.',
+    'Email Address': 'البريد الإلكتروني',
+    'Enter your email address': 'أدخل بريدك الإلكتروني',
+    'Please enter your valid email address': 'يرجى إدخال بريد إلكتروني صحيح',
+    'Full name': 'الاسم الكامل',
+    'Enter your full name': 'أدخل اسمك الكامل',
+    Password: 'كلمة المرور',
+    'Enter your password': 'أدخل كلمة المرور',
+    'Password must be at least 6 characters': 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل',
+    'Confirm Password': 'تأكيد كلمة المرور',
+    'Re-enter your password to confirm': 'أعد إدخال كلمة المرور للتأكيد',
+    'Please wait...': 'يرجى الانتظار...',
+    'Create Account': 'إنشاء حساب',
+    'Sign in to your account': 'سجّل الدخول إلى حسابك',
+    'Enter your registered email and password': 'أدخل بريدك الإلكتروني المسجل وكلمة المرور'
+  },
+  hi: {
+    'Create Your Account': 'अपना खाता बनाएँ',
+    'Register or sign in to access IG Trade.': 'IG Trade का उपयोग करने के लिए रजिस्टर करें या साइन इन करें।',
+    'Email Address': 'ईमेल पता',
+    'Enter your email address': 'अपना ईमेल पता दर्ज करें',
+    'Please enter your valid email address': 'कृपया सही ईमेल पता दर्ज करें',
+    'Full name': 'पूरा नाम',
+    'Enter your full name': 'अपना पूरा नाम दर्ज करें',
+    Password: 'पासवर्ड',
+    'Enter your password': 'अपना पासवर्ड दर्ज करें',
+    'Password must be at least 6 characters': 'पासवर्ड कम से कम 6 अक्षरों का होना चाहिए',
+    'Confirm Password': 'पासवर्ड की पुष्टि करें',
+    'Re-enter your password to confirm': 'पुष्टि के लिए पासवर्ड दोबारा दर्ज करें',
+    'Please wait...': 'कृपया प्रतीक्षा करें...',
+    'Create Account': 'खाता बनाएँ',
+    'Sign in to your account': 'अपने खाते में साइन इन करें',
+    'Enter your registered email and password': 'अपना पंजीकृत ईमेल और पासवर्ड दर्ज करें'
+  },
+  ur: {
+    'Create Your Account': 'اپنا اکاؤنٹ بنائیں',
+    'Register or sign in to access IG Trade.': 'IG Trade استعمال کرنے کے لیے رجسٹر کریں یا سائن اِن کریں۔',
+    'Email Address': 'ای میل ایڈریس',
+    'Enter your email address': 'اپنا ای میل ایڈریس درج کریں',
+    'Please enter your valid email address': 'براہ کرم درست ای میل ایڈریس درج کریں',
+    'Full name': 'پورا نام',
+    'Enter your full name': 'اپنا پورا نام درج کریں',
+    Password: 'پاس ورڈ',
+    'Enter your password': 'اپنا پاس ورڈ درج کریں',
+    'Password must be at least 6 characters': 'پاس ورڈ کم از کم 6 حروف کا ہونا چاہیے',
+    'Confirm Password': 'پاس ورڈ کی تصدیق کریں',
+    'Re-enter your password to confirm': 'تصدیق کے لیے پاس ورڈ دوبارہ درج کریں',
+    'Please wait...': 'براہ کرم انتظار کریں...',
+    'Create Account': 'اکاؤنٹ بنائیں',
+    'Sign in to your account': 'اپنے اکاؤنٹ میں سائن اِن کریں',
+    'Enter your registered email and password': 'اپنا رجسٹرڈ ای میل اور پاس ورڈ درج کریں'
+  },
+  zh: {
+    'Create Your Account': '创建您的账户',
+    'Register or sign in to access IG Trade.': '注册或登录以访问 IG Trade。',
+    'Email Address': '电子邮箱',
+    'Enter your email address': '请输入您的电子邮箱',
+    'Please enter your valid email address': '请输入有效的电子邮箱',
+    'Full name': '姓名',
+    'Enter your full name': '请输入您的全名',
+    Password: '密码',
+    'Enter your password': '请输入密码',
+    'Password must be at least 6 characters': '密码至少需要 6 个字符',
+    'Confirm Password': '确认密码',
+    'Re-enter your password to confirm': '请再次输入密码以确认',
+    'Please wait...': '请稍候...',
+    'Create Account': '创建账户',
+    'Sign in to your account': '登录您的账户',
+    'Enter your registered email and password': '请输入注册邮箱和密码'
+  },
+  es: {
+    'Create Your Account': 'Crea tu cuenta',
+    'Register or sign in to access IG Trade.': 'Regístrate o inicia sesión para acceder a IG Trade.',
+    'Email Address': 'Correo electrónico',
+    'Enter your email address': 'Introduce tu correo electrónico',
+    'Please enter your valid email address': 'Introduce un correo electrónico válido',
+    'Full name': 'Nombre completo',
+    'Enter your full name': 'Introduce tu nombre completo',
+    Password: 'Contraseña',
+    'Enter your password': 'Introduce tu contraseña',
+    'Password must be at least 6 characters': 'La contraseña debe tener al menos 6 caracteres',
+    'Confirm Password': 'Confirmar contraseña',
+    'Re-enter your password to confirm': 'Vuelve a introducir la contraseña para confirmarla',
+    'Please wait...': 'Por favor, espera...',
+    'Create Account': 'Crear cuenta',
+    'Sign in to your account': 'Inicia sesión en tu cuenta',
+    'Enter your registered email and password': 'Introduce tu correo registrado y contraseña'
+  },
+  fr: {
+    'Create Your Account': 'Créez votre compte',
+    'Register or sign in to access IG Trade.': 'Inscrivez-vous ou connectez-vous pour accéder à IG Trade.',
+    'Email Address': 'Adresse e-mail',
+    'Enter your email address': 'Saisissez votre adresse e-mail',
+    'Please enter your valid email address': 'Veuillez saisir une adresse e-mail valide',
+    'Full name': 'Nom complet',
+    'Enter your full name': 'Saisissez votre nom complet',
+    Password: 'Mot de passe',
+    'Enter your password': 'Saisissez votre mot de passe',
+    'Password must be at least 6 characters': 'Le mot de passe doit contenir au moins 6 caractères',
+    'Confirm Password': 'Confirmer le mot de passe',
+    'Re-enter your password to confirm': 'Saisissez à nouveau votre mot de passe pour confirmer',
+    'Please wait...': 'Veuillez patienter...',
+    'Create Account': 'Créer un compte',
+    'Sign in to your account': 'Connectez-vous à votre compte',
+    'Enter your registered email and password': 'Saisissez votre e-mail enregistré et votre mot de passe'
+  },
+  pt: {
+    'Create Your Account': 'Crie sua conta',
+    'Register or sign in to access IG Trade.': 'Registe-se ou entre para aceder ao IG Trade.',
+    'Email Address': 'Endereço de e-mail',
+    'Enter your email address': 'Insira o seu endereço de e-mail',
+    'Please enter your valid email address': 'Insira um endereço de e-mail válido',
+    'Full name': 'Nome completo',
+    'Enter your full name': 'Insira o seu nome completo',
+    Password: 'Palavra-passe',
+    'Enter your password': 'Insira a sua palavra-passe',
+    'Password must be at least 6 characters': 'A palavra-passe deve ter pelo menos 6 caracteres',
+    'Confirm Password': 'Confirmar palavra-passe',
+    'Re-enter your password to confirm': 'Insira novamente a palavra-passe para confirmar',
+    'Please wait...': 'Aguarde...',
+    'Create Account': 'Criar conta',
+    'Sign in to your account': 'Entre na sua conta',
+    'Enter your registered email and password': 'Insira o seu e-mail registado e a palavra-passe'
+  },
+  ru: {
+    'Create Your Account': 'Создайте аккаунт',
+    'Register or sign in to access IG Trade.': 'Зарегистрируйтесь или войдите, чтобы получить доступ к IG Trade.',
+    'Email Address': 'Электронная почта',
+    'Enter your email address': 'Введите адрес электронной почты',
+    'Please enter your valid email address': 'Введите действительный адрес электронной почты',
+    'Full name': 'Полное имя',
+    'Enter your full name': 'Введите своё полное имя',
+    Password: 'Пароль',
+    'Enter your password': 'Введите пароль',
+    'Password must be at least 6 characters': 'Пароль должен содержать не менее 6 символов',
+    'Confirm Password': 'Подтвердите пароль',
+    'Re-enter your password to confirm': 'Введите пароль ещё раз для подтверждения',
+    'Please wait...': 'Пожалуйста, подождите...',
+    'Create Account': 'Создать аккаунт',
+    'Sign in to your account': 'Войдите в свой аккаунт',
+    'Enter your registered email and password': 'Введите зарегистрированную почту и пароль'
+  },
+  tr: {
+    'Create Your Account': 'Hesabınızı Oluşturun',
+    'Register or sign in to access IG Trade.': 'IG Trade’e erişmek için kayıt olun veya giriş yapın.',
+    'Email Address': 'E-posta adresi',
+    'Enter your email address': 'E-posta adresinizi girin',
+    'Please enter your valid email address': 'Lütfen geçerli bir e-posta adresi girin',
+    'Full name': 'Ad soyad',
+    'Enter your full name': 'Adınızı ve soyadınızı girin',
+    Password: 'Şifre',
+    'Enter your password': 'Şifrenizi girin',
+    'Password must be at least 6 characters': 'Şifre en az 6 karakter olmalıdır',
+    'Confirm Password': 'Şifreyi onayla',
+    'Re-enter your password to confirm': 'Onaylamak için şifrenizi tekrar girin',
+    'Please wait...': 'Lütfen bekleyin...',
+    'Create Account': 'Hesap oluştur',
+    'Sign in to your account': 'Hesabınıza giriş yapın',
+    'Enter your registered email and password': 'Kayıtlı e-posta adresinizi ve şifrenizi girin'
+  }
 
+})
+const authButtonTranslations = {
+  en: {
+    Register: 'Register',
+    'Sign in': 'Sign in',
+    'Create Account': 'Create Account'
+  },
+  bn: {
+    Register: 'নিবন্ধন',
+    'Sign in': 'সাইন ইন',
+    'Create Account': 'অ্যাকাউন্ট তৈরি করুন'
+  },
+  ar: {
+    Register: 'التسجيل',
+    'Sign in': 'تسجيل الدخول',
+    'Create Account': 'إنشاء حساب'
+  },
+  hi: {
+    Register: 'रजिस्टर',
+    'Sign in': 'साइन इन',
+    'Create Account': 'खाता बनाएँ'
+  },
+  ur: {
+    Register: 'رجسٹر',
+    'Sign in': 'سائن اِن',
+    'Create Account': 'اکاؤنٹ بنائیں'
+  },
+  zh: {
+    Register: '注册',
+    'Sign in': '登录',
+    'Create Account': '创建账户'
+  },
+  es: {
+    Register: 'Registrarse',
+    'Sign in': 'Iniciar sesión',
+    'Create Account': 'Crear cuenta'
+  },
+  fr: {
+    Register: "S'inscrire",
+    'Sign in': 'Se connecter',
+    'Create Account': 'Créer un compte'
+  },
+  pt: {
+    Register: 'Registar',
+    'Sign in': 'Entrar',
+    'Create Account': 'Criar conta'
+  },
+  ru: {
+    Register: 'Регистрация',
+    'Sign in': 'Войти',
+    'Create Account': 'Создать аккаунт'
+  },
+  tr: {
+    Register: 'Kayıt Ol',
+    'Sign in': 'Giriş Yap',
+    'Create Account': 'Hesap Oluştur'
+  }
+};
+
+Object.entries(authButtonTranslations).forEach(([code, values]) => {
+  Object.assign(uiTranslations[code], values);
+});
 function MarketIcon({ symbol }) {
   const key = String(symbol || '')
     .toUpperCase()
@@ -1768,48 +2038,104 @@ useEffect(() => {
   setDailyStartValue(startingValue);
 }, [authSession?.user?.id]);
 
-  // Supabase authentication: admin access is granted only by the server-stored profiles.role.
-  useEffect(() => {
-    if (!supabase) { setAdminProfileLoaded(true); return }
-    const loadRole = async (session) => {
-      setAuthSession(session || null)
-      if (!session?.user?.id) { setIsAdmin(false); setAdminProfileLoaded(true); return }
-      const { data, error } = await supabase.from('profiles').select('role,display_name,email,virtual_balance,coin_wallets').eq('id', session.user.id).maybeSingle()
-      setProfileName(
-        data?.display_name ||
-        session.user.user_metadata?.full_name ||
-        session.user.user_metadata?.display_name ||
-        ''
-      );
-
-     setProfileEmail(session.user.email || session.user.phone || '');
-
-setIsAdmin(!error && data?.role === 'admin');
-
-if (!error && data?.role === 'admin') {
-  setAdminOpen(true);
-}
-
-if (!error && data) {
-  if (Number.isFinite(Number(data.virtual_balance))) {
-    setBalance(Number(data.virtual_balance));
+  
+// Supabase authentication and persistent session
+useEffect(() => {
+  if (!supabase) {
+    setAuthSession(null);
+    setIsAdmin(false);
+    setAdminProfileLoaded(true);
+    return;
   }
 
-  if (data.coin_wallets) {
-    setCoinWallets(data.coin_wallets);
-  }
-}
-      setAdminProfileLoaded(true)
+  let active = true;
+
+  const loadRole = async (session) => {
+    if (!active) return;
+
+    setAuthSession(session || null);
+
+    if (!session?.user?.id) {
+      setIsAdmin(false);
+      setAdminOpen(false);
+      setProfileName('');
+      setProfileEmail('');
+      setAdminProfileLoaded(true);
+      return;
     }
-    supabase.auth.getSession().then(({ data }) => loadRole(data.session))
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthSession(session || null)
-      // Defer profile read so it runs after the auth callback has completed.
-      if (session?.user?.id) setTimeout(() => loadRole(session), 0)
-      else { setIsAdmin(false); setAdminOpen(false); setAdminProfileLoaded(true) }
-    })
-    return () => authListener.subscription.unsubscribe()
-  }, [])
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role,display_name,email,virtual_balance,coin_wallets')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (!active) return;
+
+    setProfileName(
+      data?.display_name ||
+      session.user.user_metadata?.full_name ||
+      session.user.user_metadata?.display_name ||
+      ''
+    );
+
+    setProfileEmail(session.user.email || session.user.phone || '');
+
+    setIsAdmin(!error && data?.role === 'admin');
+
+    if (!error && data?.role === 'admin' && isAdminRoute) {
+      setAdminOpen(true);
+    }
+
+    if (!error && data) {
+      if (Number.isFinite(Number(data.virtual_balance))) {
+        setBalance(Number(data.virtual_balance));
+      }
+
+      if (data.coin_wallets) {
+        setCoinWallets(data.coin_wallets);
+      }
+    }
+
+    setAdminProfileLoaded(true);
+  };
+
+  // Restore the existing login session.
+  supabase.auth.getSession().then(({ data, error }) => {
+    if (error) {
+      console.error('Session restore failed:', error.message);
+    }
+
+    if (active) loadRole(data?.session || null);
+  });
+
+  // Listen for login, logout and token refresh.
+  const { data: authListener } = supabase.auth.onAuthStateChange(
+    (_event, session) => {
+      if (!active) return;
+
+      setAuthSession(session || null);
+
+      if (session?.user?.id) {
+        setTimeout(() => {
+          if (active) loadRole(session);
+        }, 0);
+      } else {
+        setIsAdmin(false);
+        setAdminOpen(false);
+        setProfileName('');
+        setProfileEmail('');
+        setAdminProfileLoaded(true);
+      }
+    }
+  );
+
+  return () => {
+    active = false;
+    authListener.subscription.unsubscribe();
+  };
+}, []);
+
   // Load every member's latest balance for the admin panel.
   useEffect(() => {
     if (!supabase || !isAdmin || !authSession?.user?.id) {
@@ -3008,7 +3334,178 @@ walletQrCodes={walletQrCodes}
 saveWalletSettings={saveWalletSettings}
 setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />{toast && <div className="toast">{toast}<button onClick={() => setToast('')}>×</button></div>}</main></div>
   }
+// Require authentication before accessing the website
+if (!adminProfileLoaded) {
+  return (
+    <div className="app-shell">
+      <div className="loading-screen">
+        Loading...
+      </div>
+    </div>
+  );
+}
 
+if (!authSession && !isAdminRoute) {
+  return (
+    <div className="app-shell">
+      <div className="modal-backdrop">
+        <div className="modal panel">
+          <div className="auth-top-bar">
+  <Logo />
+<select
+  className="auth-language-select"
+  value={language}
+  onChange={e => setLanguage(e.target.value)}
+  aria-label="Select language"
+>
+  {languageOptions.map(([code, name]) => (
+    <option key={code} value={code}>
+      {name}
+    </option>
+  ))}
+</select>
+  {loginOpen && (
+    <button
+      type="button"
+      className="auth-close-btn"
+      onClick={() => setLoginOpen(false)}
+    >
+      ×
+    </button>
+  )}
+</div>
+
+<h2>
+  {t(authMode === 'register' ? 'Create Your Account' : 'Sign in to your account')}
+</h2>
+          <p className="muted">
+  {t('Register or sign in to access IG Trade.')}
+</p>
+
+          <div className="auth-tabs">
+            <button
+              className="btn btn-gold btn-full"
+              onClick={() => {
+                setAuthMode('register');
+                setLoginOpen(true);
+              }}
+            >
+              {t('Register')}
+            </button>
+
+            <button
+              className="btn btn-outline btn-full"
+              onClick={() => {
+                setAuthMode('login');
+                setLoginOpen(true);
+              }}
+            >
+             {t('Sign in')}
+            </button>
+          </div>
+
+          {loginOpen && (
+  <div className="auth-form-wrapper">
+    <div className="auth-form-heading">
+      <h3>
+        {authMode === 'register'
+  ? t('Create Your Account')
+  : t('Sign in')}
+      </h3>
+
+      
+    </div>
+
+    <form onSubmit={handleAuthSubmit}>
+              <label className="field-label">{t('Email Address')}</label>
+
+<input
+  className="text-input"
+  type="email"
+  placeholder={t('Enter your email address')}
+  value={authIdentifier}
+  onChange={e => setAuthIdentifier(e.target.value)}
+  required
+/>
+
+<small className="input-hint">
+  {t('Please enter your valid email address')}
+</small>
+
+              <input
+                className="text-input"
+                value={authIdentifier}
+                onChange={e => setAuthIdentifier(e.target.value)}
+                required
+              />
+
+              {authMode === 'register' && (
+                <>
+                  <label className="field-label">{t('Full name')}</label>
+                  <input
+                    className="text-input"
+                    value={authName}
+                    onChange={e => setAuthName(e.target.value)}
+                    required
+                  />
+                  <small className="input-hint">
+  {t('Enter your full name')}
+</small>
+                </>
+              )}
+
+              <label className="field-label">{t('Password')}</label>
+              <input
+  className="text-input"
+  type="password"
+  placeholder={t('Enter your password')}
+  value={authPassword}
+  onChange={e => setAuthPassword(e.target.value)}
+  minLength={6}
+  required
+/>
+
+<small className="input-hint">
+  {t('Password must be at least 6 characters')}
+</small>
+
+              {authMode === 'register' && (
+                <>
+                  <label className="field-label">{t('Confirm Password')}</label>
+                  <input
+                    className="text-input"
+                    type="password"
+                    value={authConfirm}
+                    onChange={e => setAuthConfirm(e.target.value)}
+                    required
+                  />
+                  <small className="input-hint">
+  {t('Re-enter your password to confirm')}
+</small>
+                </>
+              )}
+
+              <button
+                className="btn btn-gold btn-full"
+                type="submit"
+                disabled={authBusy}
+              >
+                {authBusy
+  ? t('Please wait...')
+  : authMode === 'register'
+    ? t('Create Account')
+    : t('Sign in')}
+</button>
+                       </form>
+          </div>
+          )}
+
+          {toast && <div className="toast">{toast}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
   return <div className="app-shell" dir={language === 'ar' || language === 'ur' ? 'rtl' : 'ltr'}>
    <header className="topbar">
   <Logo />
