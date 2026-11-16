@@ -2219,6 +2219,74 @@ useEffect(() => {
       supabase.removeChannel(channel);
     };
   }, [isAdmin, authSession?.user?.id]);
+  useEffect(() => {
+  if (!supabase || !isAdmin || !authSession?.user?.id) {
+    setRequests([]);
+    return;
+  }
+
+  let active = true;
+
+  const loadFundingRequests = async () => {
+    const { data, error } = await supabase.rpc(
+      'admin_list_funding_requests'
+    );
+   console.log('ADMIN FUNDING REQUESTS RESULT:', { data, error });
+    if (!active) return;
+
+    if (error) {
+      console.error('Admin funding requests load failed:', error.message);
+      setToast('Could not load funding requests: ' + error.message);
+      return;
+    }
+
+    setRequests((data || []).map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      type: row.type,
+      method: row.method || '',
+      amount: Number(row.amount),
+      status: row.status,
+      created: row.created,
+      adminNote: row.admin_note || '',
+      address: row.address || '',
+      proof_path: row.proof_path || ''
+    })));
+  };
+
+  loadFundingRequests();
+
+  const channel = supabase
+    .channel('admin-funding-requests-live')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'deposit_requests'
+      },
+      () => {
+        if (active) loadFundingRequests();
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'withdrawal_requests'
+      },
+      () => {
+        if (active) loadFundingRequests();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    active = false;
+    supabase.removeChannel(channel);
+  };
+}, [isAdmin, authSession?.user?.id]);
 useEffect(() => {
   const userId = authSession?.user?.id;
 
