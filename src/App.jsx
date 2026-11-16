@@ -3341,14 +3341,70 @@ const saveWalletSettings = async (qrFiles) => {
     console.log('SUPABASE WITHDRAW INSERT SUCCESS:', data);
   };
 
-  const approveRequest = (id, status, adminNote = '') => {
-    const request = requests.find(r => r.id === id)
-    if (!request || request.status !== 'Pending') return
-    if (status === 'Rejected' && !String(adminNote).trim()) return setToast('Write a rejection reason before rejecting this request.')
-    // Review status only: request approval/rejection must never alter balance automatically.
-    setRequests(rs => rs.map(r => r.id === id ? { ...r, status, adminNote: String(adminNote || '').trim(), reviewedAt: new Date().toLocaleString() } : r))
-    setToast(`${request.type} request ${status.toLowerCase()}. Balance was not changed; adjust it manually in Admin if needed.`)
+  const approveRequest = async (id, status, adminNote = '') => {
+  const request = requests.find(r => r.id === id);
+
+  if (!supabase || !isAdmin) {
+    return setToast('Admin access required.');
   }
+
+  if (!request || request.status !== 'Pending') {
+    return setToast('This request has already been reviewed.');
+  }
+
+  if (status === 'Rejected' && !String(adminNote).trim()) {
+    return setToast('Write a rejection reason before rejecting.');
+  }
+
+  const requestType =
+    request.type === 'Withdraw' ? 'Withdrawal' : request.type;
+
+  if (!['Deposit', 'Withdrawal'].includes(requestType)) {
+    return setToast('Invalid request type.');
+  }
+
+  try {
+    const { data, error } = await supabase.rpc(
+      'admin_review_funding_request',
+      {
+        p_request_id: id,
+        p_request_type: requestType,
+        p_status: status,
+        p_admin_note: String(adminNote || '').trim()
+      }
+    );
+
+    if (error) throw error;
+    if (!data?.success) {
+      throw new Error('Request review was not confirmed.');
+    }
+
+    setRequests(current =>
+      current.map(r =>
+        r.id === id
+          ? {
+              ...r,
+              status: data.status,
+              adminNote: String(adminNote || '').trim(),
+              reviewedAt: new Date().toISOString()
+            }
+          : r
+      )
+    );
+
+    setToast(
+      status === 'Approved'
+        ? requestType === 'Withdrawal'
+          ? 'Withdrawal Successfully Completed.'
+          : 'Deposit Successfully Approved.'
+        : `${requestType} request rejected successfully.`
+    );
+
+  } catch (error) {
+    console.error('Funding request review failed:', error);
+    setToast('Approval failed: ' + error.message);
+  }
+};
 
   const copy = async (text) => {
     try { await navigator.clipboard.writeText(text); setToast('Copied.') }
