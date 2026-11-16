@@ -1,0 +1,140 @@
+
+.monitoring-container {
+  width: 100%;
+  padding: 20px;
+  color: #e8edf5;
+  background: #101722;
+  border-radius: 14px;
+  box-sizing: border-box;
+}
+
+.monitoring-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.monitoring-header h2 {
+  margin: 0 0 6px;
+  font-size: 23px;
+}
+
+.monitoring-header p {
+  margin: 0;
+  color: #98a6b8;
+  font-size: 13px;
+}
+
+.monitoring-refresh {
+  padding: 10px 17px;
+  border: 0;
+  border-radius: 8px;
+  background: #2878e5;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.monitoring-refresh:hover {
+  background: #1764ca;
+}
+
+.monitoring-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.monitoring-stat {
+  padding: 18px;
+  background: #1a2636;
+  border: 1px solid #2b3a4d;
+  border-radius: 11px;
+}
+
+.monitoring-stat span {
+  display: block;
+  color: #a8b5c7;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.monitoring-stat strong {
+  font-size: 27px;
+  color: #ffffff;
+}
+
+.monitoring-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #2b3a4d;
+  border-radius: 10px;
+}
+
+.monitoring-table {
+  width: 100%;
+  min-width: 850px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.monitoring-table th,
+.monitoring-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #2b3a4d;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.monitoring-table th {
+  background: #1a2636;
+  color: #aebbd0;
+  font-weight: 600;
+}
+
+.monitoring-table td {
+  color: #e0e7f0;
+}
+
+.monitoring-table tbody tr:hover {
+  background: #1a2636;
+}
+
+.monitoring-user-id {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.monitoring-message {
+  color: #aebbd0;
+  padding: 20px 0;
+}
+
+.monitoring-error {
+  color: #ff7777;
+  padding: 12px;
+  background: #3b2028;
+  border-radius: 8px;
+}
+
+@media (max-width: 650px) {
+  .monitoring-container {
+    padding: 13px;
+  }
+
+  .monitoring-header h2 {
+    font-size: 19px;
+  }
+
+  .monitoring-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .monitoring-stat {
+    padding: 14px;
+  }
+}

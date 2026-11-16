@@ -69,6 +69,37 @@ const supabase = isSupabaseConfigured
       }
     })
   : null
+
+async function trackActivity(eventType, pagePath = null) {
+  try {
+    if (!supabase) return;
+
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) return;
+
+    const response = await fetch('/api/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({
+        eventType,
+        pagePath
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Activity tracking failed');
+    }
+  } catch (error) {
+    console.error('Activity tracking error:', error);
+  }
+}
+
 console.log('Supabase URL loaded:', Boolean(import.meta.env.VITE_SUPABASE_URL))
 console.log('Supabase key loaded:', Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY))
 console.log('Supabase configured:', isSupabaseConfigured)
@@ -2392,6 +2423,7 @@ const refreshAccount = async () => {
         setToast(authMode === 'register' ? 'Account created and signed in.' : 'Signed in successfully.')
       }
       if (result.data?.session) {
+                if (authMode !== 'register') await trackActivity('login');
         const { data: profile } = await supabase.from('profiles').select('role,virtual_balance,coin_wallets').eq('id', result.data.session.user.id).maybeSingle()
         setIsAdmin(profile?.role === 'admin')
         if (profile?.role === 'admin' && isAdminRoute) setAdminOpen(true)
@@ -2514,7 +2546,11 @@ return () => {
 }
 }, [])
 
-  
+  useEffect(() => {
+  if (!authSession?.user?.id) return;
+
+  trackActivity('page_view', String(page).toLowerCase());
+}, [page, authSession?.user?.id]);
   // Load historical candles for the selected market and chart timeframe.
 useEffect(() => {
   const market = marketDefinitions.find(m => m.symbol === selected)
@@ -3324,7 +3360,7 @@ const saveWalletSettings = async (qrFiles) => {
   }
 
   if (isAdminRoute && authSession && isAdmin) {
-    return <div className="app-shell admin-only-shell"><main className="main-content" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}><div className="page-title"><div className="eyebrow">RESTRICTED AREA</div><h1>Admin controls</h1><p className="muted">Signed in as an authorized admin.</p><button className="btn btn-outline" onClick={async () => { await supabase?.auth.signOut(); setAuthSession(null); setIsAdmin(false); setAdminOpen(false); window.location.href = '/' }}>Sign out</button></div><AdminPanel adminOpen={true} setAdminOpen={() => { window.location.href = '/' }} tradeEnabled={tradeEnabled} setTradeEnabled={setTradeEnabled} requests={requests} approveRequest={approveRequest} 
+    return <div className="app-shell admin-only-shell"><main className="main-content" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}><div className="page-title"><div className="eyebrow">RESTRICTED AREA</div><h1>Admin controls</h1><p className="muted">Signed in as an authorized admin.</p><button className="btn btn-outline" onClick={async () => { await supabase?.auth.signOut(); setAuthSession(null); setIsAdmin(false); setAdminOpen(false); window.location.href = '/' }}>Sign out</button></div><AdminPanel supabase={supabase} adminOpen={true} setAdminOpen={() => { window.location.href = '/' }} tradeEnabled={tradeEnabled} setTradeEnabled={setTradeEnabled} requests={requests} approveRequest={approveRequest} 
     advancedRequests={advancedRequests}
 reviewAdvancedRequest={reviewAdvancedRequest}
     memberEmail={memberEmail} setMemberEmail={setMemberEmail} memberAmount={memberAmount} setMemberAmount={setMemberAmount} memberAction={memberAction} setMemberAction={setMemberAction} adjustMemberBalance={adjustMemberBalance} members={members}

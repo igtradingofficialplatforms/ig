@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-
+import Monitoring from './Monitoring.jsx';
 const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AdminPanel({
+  supabase,
   adminOpen, setAdminOpen, tradeEnabled, setTradeEnabled, requests, approveRequest,
   memberEmail, setMemberEmail, memberAmount, setMemberAmount, memberAction,
   adjustMemberBalance, members, walletAddresses, setWalletAddresses, setToast,
@@ -237,7 +238,8 @@ export default function AdminPanel({
 >
   Save wallet settings
 </button>
-
+     <div className="admin-section-title">User Activity Monitoring</div>
+<Monitoring supabase={supabase} />
       <div className="admin-section-title">Customer care</div>
       <label className="field-label">Telegram support URL</label><input className="text-input" value={telegramUrl} onChange={e => setTelegramUrl(e.target.value)} placeholder="https://t.me/your_support" />
       <button className="btn btn-outline btn-full" onClick={() => setToast('Support URL updated in this browser preview only.')}>Save support link</button>
