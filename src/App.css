@@ -4731,3 +4731,145 @@ video {
     padding: 8px 3px;
   }
 }
+
+/* FINAL MOBILE HEADER ALIGNMENT */
+@media screen and (max-width: 800px) {
+
+  .topbar {
+    width: 100% !important;
+    height: 65px !important;
+    min-height: 65px !important;
+    padding: 0 8px !important;
+
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+
+    gap: 5px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .topbar > .brand {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+    font-size: 15px !important;
+    gap: 5px !important;
+  }
+
+  .topbar-right {
+    width: auto !important;
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+
+    gap: 5px !important;
+  }
+
+  .language-picker-label {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    gap: 2px !important;
+  }
+
+  .language-picker {
+    width: 82px !important;
+    min-width: 0 !important;
+    max-width: 82px !important;
+    padding: 6px 2px !important;
+    font-size: 10px !important;
+  }
+
+  .topbar-right .virtual-pill,
+  .topbar-right .install-btn {
+    display: none !important;
+  }
+
+  .topbar-right .login-btn,
+  .topbar-right .register-btn {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    padding: 7px 7px !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+  }
+
+  .topbar-right .avatar {
+    flex: 0 0 29px !important;
+    width: 29px !important;
+    min-width: 29px !important;
+    height: 29px !important;
+  }
+}
+
+@media screen and (max-width: 360px) {
+  .topbar {
+    padding: 0 5px !important;
+    gap: 3px !important;
+  }
+
+  .topbar-right {
+    gap: 3px !important;
+  }
+
+  .topbar > .brand {
+    font-size: 13px !important;
+  }
+
+  .language-picker {
+    width: 72px !important;
+    max-width: 72px !important;
+  }
+
+  .topbar-right .login-btn,
+  .topbar-right .register-btn {
+    padding: 6px 5px !important;
+    font-size: 9px !important;
+  }
+}
+
+/* GLOBAL iPHONE SAFARI INPUT ZOOM FIX */
+@media screen and (max-width: 800px) {
+
+  input,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="search"],
+  input[type="url"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  textarea,
+  select,
+  .text-input,
+  .amount-input input,
+  .amount-input-wrap input,
+  .auth-form input,
+  .auth-modal input,
+  .admin-drawer input,
+  .form-panel input,
+  .wallet-currency-select {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100% !important;
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    font-size: 16px !important;
+    outline-offset: 0;
+  }
+}
