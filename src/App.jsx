@@ -1410,6 +1410,8 @@ const [convertPreview, setConvertPreview] = useState(null);
   const [trade, setTrade] = useState(null)
   const [remaining, setRemaining] = useState(0)
   const [balance, setBalance] = useState(0)
+  const [btcBalance, setBtcBalance] = useState(0);
+const [ethBalance, setEthBalance] = useState(0);
   const [coinWallets, setCoinWallets] = useState({
   Spot: {
     BTC: 0,
@@ -1430,15 +1432,6 @@ const [convertPreview, setConvertPreview] = useState(null);
   }
 });
   const [dailyStartValue, setDailyStartValue] = useState(null);
-
-const estimatedTotalValue = useMemo(() => {
-  return Number(balance || 0);
-}, [balance]);
-
-const todaysPNL = useMemo(() => {
-  if (dailyStartValue === null) return 0;
-  return estimatedTotalValue - dailyStartValue;
-}, [estimatedTotalValue, dailyStartValue]);
   const [tradeStarting, setTradeStarting] = useState(false)
   const [tradeHistory, setTradeHistory] = useState([])
   const [depositMethod, setDepositMethod] = useState('TRC20')
@@ -1896,8 +1889,9 @@ if (!savedProfile) {
   setToast(`${amount} ${coin} transferred successfully.`);
 };
 
+
 const assetRates = {
-  USDT: Number(livePrices.USDT?.price || 0),
+  USDT: 1,
   USDC: 1,
   BTC: btcPrice,
   ETH: ethPrice,
@@ -1905,18 +1899,26 @@ const assetRates = {
   EUR: eurPrice,
   GOLD: Number(livePrices.XAU?.price || 0)
 };
+
 const fundingTotalUSDT =
   Number(balance || 0) +
-  ['BTC', 'ETH', 'SOL', 'USDC', 'EUR', 'GOLD'].reduce(
+  Number(btcBalance || 0) * btcPrice +
+  Number(ethBalance || 0) * ethPrice +
+  ['SOL', 'USDC', 'EUR', 'GOLD'].reduce(
     (total, coin) => {
       const amount = Number(coinWallets.Funding?.[coin] || 0);
       const rate = Number(assetRates[coin] || 0);
-
-      return total + (amount * rate);
+      return total + amount * rate;
     },
     0
   );
 
+const estimatedTotalValue = fundingTotalUSDT;
+
+const todaysPNL = useMemo(() => {
+  if (dailyStartValue === null) return 0;
+  return estimatedTotalValue - dailyStartValue;
+}, [estimatedTotalValue, dailyStartValue]);
 const handleConvert = async () => {
   const amount = Number(convertAmount);
   const from = convertFrom;
@@ -1981,29 +1983,39 @@ const handleConvert = async () => {
   };
 
   let nextBalance = Number(balance || 0);
+  let nextBtcBalance = Number(btcBalance || 0);
+let nextEthBalance = Number(ethBalance || 0);
 
   // Funding USDT is stored in virtual_balance
   if (from === 'USDT') {
-    nextBalance -= amount;
-  } else {
-    nextWallets.Funding[from] =
-      Number(nextWallets.Funding[from] || 0) - amount;
-  }
+  nextBalance -= amount;
+} else {
+  nextWallets.Funding[from] =
+    Number(nextWallets.Funding[from] || 0) - amount;
 
-  if (to === 'USDT') {
-    nextBalance += receiveAmount;
-  } else {
-    nextWallets.Funding[to] =
-      Number(nextWallets.Funding[to] || 0) + receiveAmount;
-  }
+  if (from === 'BTC') nextBtcBalance -= amount;
+  if (from === 'ETH') nextEthBalance -= amount;
+}
+
+ if (to === 'USDT') {
+  nextBalance += receiveAmount;
+} else {
+  nextWallets.Funding[to] =
+    Number(nextWallets.Funding[to] || 0) + receiveAmount;
+
+  if (to === 'BTC') nextBtcBalance += receiveAmount;
+  if (to === 'ETH') nextEthBalance += receiveAmount;
+}
 
   // Save conversion to Supabase
   const { error } = await supabase
     .from('profiles')
-    .update({
-      virtual_balance: nextBalance,
-      coin_wallets: nextWallets
-    })
+   .update({
+  virtual_balance: nextBalance,
+  btc_balance: nextBtcBalance,
+  eth_balance: nextEthBalance,
+  coin_wallets: nextWallets
+})
     .eq('id', userId);
 
   if (error) {
@@ -2013,8 +2025,9 @@ const handleConvert = async () => {
 
   // Update screen after successful save
   setBalance(nextBalance);
-  setCoinWallets(nextWallets);
-
+setBtcBalance(nextBtcBalance);
+setEthBalance(nextEthBalance);
+setCoinWallets(nextWallets);
   setToast(
     `Converted ${amount} ${from} to ${receiveAmount} ${to}.`
   );
@@ -2027,10 +2040,14 @@ const handleConvert = async () => {
 const selectedRate = assetRates[selectedAsset] || 0;
 
 const availableAmount =
-  selectedRate > 0 ? usdtBalance / selectedRate : 0;
+  selectedRate > 0
+    ? fundingTotalUSDT / selectedRate
+    : 0;
 
 const convertedPNL =
-  selectedRate > 0 ? todaysPNL / selectedRate : 0;
+  selectedRate > 0
+    ? todaysPNL / selectedRate
+    : 0;
 
 const pnlPercentage =
   dailyStartValue > 0
@@ -2097,7 +2114,7 @@ useEffect(() => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('role,display_name,email,virtual_balance,coin_wallets')
+      .select('role,display_name,email,virtual_balance,btc_balance,eth_balance,coin_wallets')
       .eq('id', session.user.id)
       .maybeSingle();
 
@@ -2119,6 +2136,8 @@ useEffect(() => {
     }
 
     if (!error && data) {
+      setBtcBalance(Number(data.btc_balance || 0));
+setEthBalance(Number(data.eth_balance || 0));
       if (Number.isFinite(Number(data.virtual_balance))) {
         setBalance(Number(data.virtual_balance));
       }
@@ -2307,7 +2326,7 @@ const refreshAccount = async () => {
 ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('virtual_balance, coin_wallets')
+      .select('virtual_balance, btc_balance, eth_balance, coin_wallets')
       .eq('id', userId)
       .maybeSingle(),
 
@@ -2359,6 +2378,8 @@ const refreshAccount = async () => {
       console.error('Balance load error:', profileError.message);
     } else if (profile) {
   setBalance(Number(profile.virtual_balance || 0));
+  setBtcBalance(Number(profile.btc_balance || 0));
+  setEthBalance(Number(profile.eth_balance || 0));
 
   if (profile.coin_wallets) {
     setCoinWallets(profile.coin_wallets);
@@ -2430,16 +2451,15 @@ const refreshAccount = async () => {
         filter: `id=eq.${userId}`
       },
       payload => {
-        if (
-          active &&
-          payload.new &&
-          Number.isFinite(Number(payload.new.virtual_balance))
-        ) {
-          setBalance(Number(payload.new.virtual_balance));
-          if (active && payload.new?.coin_wallets) {
-  setCoinWallets(payload.new.coin_wallets);
+       if (active && payload.new) {
+  setBalance(Number(payload.new.virtual_balance || 0));
+  setBtcBalance(Number(payload.new.btc_balance || 0));
+  setEthBalance(Number(payload.new.eth_balance || 0));
+
+  if (payload.new.coin_wallets) {
+    setCoinWallets(payload.new.coin_wallets);
+  }
 }
-        }
       }
     )
     .on(
@@ -2496,10 +2516,20 @@ const refreshAccount = async () => {
       }
       if (result.data?.session) {
                 if (authMode !== 'register') await trackActivity('login');
-        const { data: profile } = await supabase.from('profiles').select('role,virtual_balance,coin_wallets').eq('id', result.data.session.user.id).maybeSingle()
+        const { data: profile } = await supabase.from('profiles').select('role,virtual_balance,btc_balance,eth_balance,coin_wallets').eq('id', result.data.session.user.id).maybeSingle()
+        if (profile?.coin_wallets) {
+  setCoinWallets(profile.coin_wallets);
+}
         setIsAdmin(profile?.role === 'admin')
         if (profile?.role === 'admin' && isAdminRoute) setAdminOpen(true)
         if (profile && Number.isFinite(Number(profile.virtual_balance))) setBalance(Number(profile.virtual_balance))
+          if (profile) {
+  setBtcBalance(Number(profile.btc_balance || 0));
+  setEthBalance(Number(profile.eth_balance || 0));
+}
+    if (profile?.coin_wallets) {
+  setCoinWallets(profile.coin_wallets);
+}
       }
     } catch (error) {
       setToast(error?.message || 'Authentication failed. Check Supabase Auth settings.')
@@ -3280,43 +3310,51 @@ const saveWalletSettings = async (qrFiles) => {
   }
 };
 
-  const submitDeposit = async (e) => {
+ 
+const submitDeposit = async (e) => {
   e.preventDefault();
 
   const n = Number(depositAmount);
+  const currency = depositMethod === 'TRC20' ? 'USDT' : depositMethod;
   const userId = authSession?.user?.id;
-
+console.log('DEPOSIT DEBUG:', {
+  depositAmount,
+  n,
+  depositMethod,
+  currency,
+  userId
+});
   if (!supabase || !userId) {
     return setToast('Please log in first.');
   }
 
-  if (!Number.isFinite(n) || n < 50) {
-    return setToast('Minimum deposit request is $50.');
-  }
+  if (!Number.isFinite(n) || n <= 0) {
+  return setToast('Enter a valid deposit amount.');
+}
 
+if (depositMethod === 'TRC20' && n < 50) {
+  return setToast('Minimum USDT deposit request is 50.');
+}
   try {
     let proofPath = null;
 
     if (depositFile?.file) {
       setToast('Uploading screenshot...');
-
-      proofPath = await uploadDepositProof(
-        depositFile.file,
-        userId
-      );
+      proofPath = await uploadDepositProof(depositFile.file, userId);
     }
 
     const { data, error } = await supabase
       .from('deposit_requests')
       .insert({
-        user_id: userId,
-        amount: n,
-        method: depositMethod,
-        network: depositMethod,
-        proof_url: proofPath,
-        proof_path: proofPath,
-        status: 'Pending'
-      })
+  user_id: userId,
+  amount: n,
+  method: depositMethod,
+  network: depositMethod,
+  currency: depositMethod === 'TRC20' ? 'USDT' : depositMethod,
+  proof_url: proofPath,
+  proof_path: proofPath,
+  status: 'Pending'
+})
       .select()
       .single();
 
@@ -3327,6 +3365,7 @@ const saveWalletSettings = async (qrFiles) => {
         id: data.id,
         type: 'Deposit',
         method: data.method,
+        currency,
         amount: Number(data.amount),
         status: data.status,
         created: data.created_at,
@@ -3348,70 +3387,96 @@ const saveWalletSettings = async (qrFiles) => {
   }
 };
 
+const withdrawCurrency =
+  withdrawMethod === 'TRC20' ? 'USDT' : withdrawMethod;
 
-  const submitWithdraw = async (e) => {
-    e.preventDefault();
-    console.log('WITHDRAW BUTTON FUNCTION RUNNING');
-    const n = Number(withdrawAmount);
-    const address = withdrawAddress.trim();
+const withdrawAvailableBalance =
+  withdrawCurrency === 'USDT'
+    ? Number(balance || 0)
+    : withdrawCurrency === 'BTC'
+      ? Number(btcBalance || 0)
+      : Number(ethBalance || 0);
+  console.log('WITHDRAW DEBUG:', {
+  withdrawMethod,
+  withdrawCurrency,
+  btcBalance,
+  ethBalance,
+  balance,
+  withdrawAvailableBalance
+});
+const submitWithdraw = async (e) => {
+  e.preventDefault();
 
-    if (!address || !n || n <= 0) {
-      return setToast('Enter a destination address and valid amount.');
-    }
+  const n = Number(withdrawAmount);
+  const address = withdrawAddress.trim();
 
-    if (n > balance) {
-      return setToast('Insufficient available balance.');
-    }
+  const minimumAmount =
+    withdrawCurrency === 'USDT' ? 1 : 0.00000001;
 
-    if (!supabase) {
-      return setToast('Supabase is not configured.');
-    }
+  if (!address || !Number.isFinite(n) || n <= 0) {
+    return setToast('Enter a destination address and valid amount.');
+  }
 
-    const {
-      data: { user },
-      error: authError
-    } = await supabase.auth.getUser();
+  if (n < minimumAmount) {
+    return setToast(`Minimum withdrawal is ${minimumAmount} ${withdrawCurrency}.`);
+  }
 
-    if (authError || !user) {
-      return setToast('Please sign in before submitting a withdrawal request.');
-    }
+  if (n > withdrawAvailableBalance) {
+    return setToast(`Insufficient ${withdrawCurrency} balance.`);
+  }
 
-    const { data, error } = await supabase
-      .from('withdrawal_requests')
-      .insert({
-        user_id: user.id,
-        amount: n,
-        method: withdrawMethod,
-        wallet_address: address,
-        status: 'Pending'
-      })
-      .select()
-      .single();
+  if (!supabase) {
+    return setToast('Supabase is not configured.');
+  }
 
-    if (error) {
-      console.error('Withdrawal submission failed:', error);
-      return setToast(`Withdrawal failed: ${error.message}`);
-    }
+  const {
+    data: { user },
+    error: authError
+  } = await supabase.auth.getUser();
 
-    setRequests(r => [
-      {
-        id: data.id,
-        type: 'Withdraw',
-        method: data.method,
-        amount: Number(data.amount),
-        address: data.wallet_address,
-        status: data.status,
-        created: data.created_at
-      },
-      ...r
-    ]);
+  if (authError || !user) {
+    return setToast('Please sign in before submitting a withdrawal request.');
+  }
 
-    setToast('Withdrawal request submitted');
-    setWithdrawAddress('');
-    setWithdrawAmount('');
+  const { data, error } = await supabase
+    .from('withdrawal_requests')
+    .insert({
+      user_id: user.id,
+      amount: n,
+      currency: withdrawCurrency,
+      method: withdrawMethod,
+      wallet_address: address,
+      status: 'Pending'
+    })
+    .select()
+    .single();
 
-    console.log('SUPABASE WITHDRAW INSERT SUCCESS:', data);
-  };
+  if (error) {
+    console.error('Withdrawal submission failed:', error);
+    return setToast(`Withdrawal failed: ${error.message}`);
+  }
+
+  setRequests(r => [
+    {
+      id: data.id,
+      type: 'Withdraw',
+      method: data.method,
+      currency: data.currency,
+      amount: Number(data.amount),
+      address: data.wallet_address,
+      status: data.status,
+      created: data.created_at
+    },
+    ...r
+  ]);
+
+  setToast('Withdrawal request submitted');
+  setWithdrawAddress('');
+  setWithdrawAmount('');
+
+  console.log('SUPABASE WITHDRAW INSERT SUCCESS:', data);
+};
+
 
   const approveRequest = async (id, status, adminNote = '') => {
   const request = requests.find(r => r.id === id);
@@ -3807,8 +3872,8 @@ if (!authSession && !isAdminRoute) {
   </label>
 </div>
   <div className="wallet-total">
-    ${usdtBalance.toFixed(2)} USDT
-  </div>
+  ${fundingTotalUSDT.toFixed(2)} USDT
+</div>
 
   <div className="wallet-available">
     ● Available funds · ≈ {availableAmount.toFixed(8)} {selectedAsset}
@@ -3974,20 +4039,26 @@ onTimeframeChange={setChartTimeframe}
     />
   </div>
 )}
-          <label className="field-label" htmlFor="deposit-amount">
-            Amount (USDT) · Minimum $50
-          </label>
-          <div className="amount-input">
-            <span>$</span>
-            <input
-              id="deposit-amount"
-              type="number"
-              min="50"
-              value={depositAmount}
-              onChange={e => setDepositAmount(e.target.value)}
-              required
-            />
-          </div>
+         
+<label className="field-label" htmlFor="deposit-amount">
+  Amount ({depositMethod === 'TRC20' ? 'USDT' : depositMethod})
+  {depositMethod === 'TRC20' ? ' · Minimum $50' : ''}
+</label>
+
+<div className="amount-input">
+  <span>
+    {depositMethod === 'TRC20' ? '$' : depositMethod === 'BTC' ? '₿' : 'Ξ'}
+  </span>
+  <input
+    id="deposit-amount"
+    type="number"
+    min={depositMethod === 'TRC20' ? 50 : 0}
+    step="any"
+    value={depositAmount}
+    onChange={e => setDepositAmount(e.target.value)}
+    required
+  />
+</div>
 
           <label className="field-label" htmlFor="receipt">
             Payment screenshot
@@ -4051,10 +4122,19 @@ onTimeframeChange={setChartTimeframe}
                   submitWithdraw(e);
                 }}
               >
-                <div className="available-balance">
-                  <span>Available balance</span>
-                  <strong>{money(balance)} <small>USDT</small></strong>
-                </div>
+                
+<div className="available-balance">
+  <span>Available balance</span>
+  <strong>
+    {withdrawMethod === 'TRC20'
+      ? money(balance)
+      : Number(coinWallets.Funding?.[withdrawMethod] || 0).toLocaleString('en-US', {
+          maximumFractionDigits: 8
+        })}
+    <small> {withdrawMethod === 'TRC20' ? 'USDT' : withdrawMethod}</small>
+  </strong>
+</div>
+
 
                 <label className="field-label">Select network</label>
                 <div className="network-options">
@@ -4099,22 +4179,35 @@ onTimeframeChange={setChartTimeframe}
   required
 />
 
-                <label className="field-label" htmlFor="withdraw-amount">
-                  Amount (USDT)
-                </label>
-                <div className="amount-input">
-                  <span>$</span>
-                  <input
-                    id="withdraw-amount"
-                    type="number"
-                    min="1"
-                    max={balance}
-                    value={withdrawAmount}
-                    onChange={e => setWithdrawAmount(e.target.value)}
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
+               
+<label className="field-label" htmlFor="withdraw-amount">
+  Amount ({withdrawCurrency}) · Available:{' '}
+  {withdrawAvailableBalance.toLocaleString('en-US', {
+    maximumFractionDigits: 8
+  })} {withdrawCurrency}
+</label>
+
+<div className="amount-input">
+  <span>
+    {withdrawCurrency === 'USDT'
+      ? '$'
+      : withdrawCurrency === 'BTC'
+        ? '₿'
+        : 'Ξ'}
+  </span>
+
+  <input
+    id="withdraw-amount"
+    type="number"
+    min={withdrawCurrency === 'USDT' ? '1' : '0.00000001'}
+    max={withdrawAvailableBalance}
+    step="any"
+    value={withdrawAmount}
+    onChange={e => setWithdrawAmount(e.target.value)}
+    placeholder="0.00"
+    required
+  />
+</div>
 
                 <button
                   className="btn btn-gold btn-full btn-large"
@@ -4156,7 +4249,7 @@ onTimeframeChange={setChartTimeframe}
         </select>
       </div>
 
-      <h1>{money(balance)} <small>USDT</small></h1>
+      <h1>{money(fundingTotalUSDT)} <small>USDT</small></h1>
       <p className="muted">● Available funds</p>
 
       <div className="assets-pnl">
@@ -4571,26 +4664,45 @@ setTransferAmount(String(available));
 )}
 
 </div>
-
 <div className="stat-grid">
-      <div className="panel stat-card">
-        <small>Account balance</small>
-        <strong>{money(balance)}</strong>
-        <span className="muted">USDT funds</span>
-      </div>
+  <div className="panel stat-card">
+    <small>USDT Balance</small>
+    <strong>{money(balance)}</strong>
+    <span className="muted">USDT funds</span>
+  </div>
 
-      <div className="panel stat-card">
-        <small>Trades</small>
-        <strong>{tradeHistory.length}</strong>
-        <span className="muted">Completed trades</span>
-      </div>
+  <div className="panel stat-card">
+    <small>BTC Balance</small>
+    <strong>{btcBalance.toFixed(8)} BTC</strong>
+    <span className="muted">
+      {livePrices.BTC?.price
+        ? money(btcBalance * livePrices.BTC.price)
+        : 'Market price loading'}
+    </span>
+  </div>
 
-      <div className="panel stat-card">
-        <small>Wallet requests</small>
-        <strong>{requests.length}</strong>
-        <span className="muted">Deposit / Withdraw</span>
-      </div>
-    </div>
+  <div className="panel stat-card">
+    <small>ETH Balance</small>
+    <strong>{ethBalance.toFixed(8)} ETH</strong>
+    <span className="muted">
+      {livePrices.ETH?.price
+        ? money(ethBalance * livePrices.ETH.price)
+        : 'Market price loading'}
+    </span>
+  </div>
+
+  <div className="panel stat-card">
+    <small>Trades</small>
+    <strong>{tradeHistory.length}</strong>
+    <span className="muted">Completed trades</span>
+  </div>
+
+  <div className="panel stat-card">
+    <small>Wallet requests</small>
+    <strong>{requests.length}</strong>
+    <span className="muted">Deposit / Withdraw</span>
+  </div>
+</div>
 
     <div className="panel history-panel">
       <div className="history-tabs">
