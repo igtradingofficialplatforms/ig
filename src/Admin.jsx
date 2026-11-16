@@ -1,248 +1,661 @@
+
 import React, { useMemo, useState } from 'react';
 import Monitoring from './Monitoring.jsx';
-const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import './Admin.css';
+
+const money = (n) =>
+  '$' + Number(n || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 
 export default function AdminPanel({
   supabase,
-  adminOpen, setAdminOpen, tradeEnabled, setTradeEnabled, requests, approveRequest,
-  memberEmail, setMemberEmail, memberAmount, setMemberAmount, memberAction,
-  adjustMemberBalance, members, walletAddresses, setWalletAddresses, setToast,
-  telegramUrl, setTelegramUrl,
-  walletQrCodes, saveWalletSettings,
+  adminOpen,
+  setAdminOpen,
+  tradeEnabled,
+  setTradeEnabled,
+  requests = [],
+  approveRequest,
+  memberEmail,
+  setMemberEmail,
+  memberAmount,
+  setMemberAmount,
+  adjustMemberBalance,
+  members = [],
+  setToast,
+  telegramUrl,
+  setTelegramUrl,
   advancedRequests = [],
   reviewAdvancedRequest
 }) {
+  const [activePage, setActivePage] = useState('Overview');
   const [requestFilter, setRequestFilter] = useState('All');
+  const [search, setSearch] = useState('');
   const [rejectionNotes, setRejectionNotes] = useState({});
   const [advancedRejectionNotes, setAdvancedRejectionNotes] = useState({});
-  const [qrFiles, setQrFiles] = useState({
-  TRC20: null,
-  BTC: null,
-  ETH: null
-});
-  const filteredRequests = useMemo(() => requests.filter(r => requestFilter === 'All' || (requestFilter === 'Pending' ? r.status === 'Pending' : r.type === requestFilter)), [requests, requestFilter]);
+
+  const navItems = [
+    { name: 'Overview', icon: '⌂' },
+    { name: 'Requests', icon: '▤' },
+    { name: 'Borrow', icon: '⇄' },
+    { name: 'Users', icon: '♙' },
+    { name: 'Monitoring', icon: '◉' },
+    { name: 'Support', icon: '☏' },
+    { name: 'Settings', icon: '⚙' }
+  ];
+
+  const pendingCount = requests.filter(r => r.status === 'Pending').length;
+  const pendingBorrow = advancedRequests.filter(r => r.status === 'Pending').length;
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter(r => {
+      const matchesFilter =
+        requestFilter === 'All' ||
+        (requestFilter === 'Pending' && r.status === 'Pending') ||
+        r.type === requestFilter;
+
+      const term = search.toLowerCase();
+      const matchesSearch =
+        !term ||
+        String(r.id || '').toLowerCase().includes(term) ||
+        String(r.email || r.user_email || '').toLowerCase().includes(term) ||
+        String(r.method || '').toLowerCase().includes(term);
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [requests, requestFilter, search]);
+
+  const filteredMembers = useMemo(() => {
+    const term = search.toLowerCase();
+    if (!term) return members;
+
+    return members.filter(m =>
+      String(m.name || '').toLowerCase().includes(term) ||
+      String(m.email || '').toLowerCase().includes(term) ||
+      String(m.id || '').toLowerCase().includes(term)
+    );
+  }, [members, search]);
+
+  const totalVirtualBalance = members.reduce(
+    (sum, m) => sum + Number(m.balance || 0), 0
+  );
+
+  const totalRequestValue = requests.reduce(
+    (sum, r) => sum + Number(r.amount || 0), 0
+  );
+
   if (!adminOpen) return null;
 
-  return (
-    <div className="admin-drawer">
-      <div className="drawer-head"><div><span className="eyebrow">LOCAL CONTROLS</span><h2>Admin panel</h2></div><button className="icon-button" onClick={() => setAdminOpen(false)} aria-label="Close admin panel">×</button></div>
-      <div className="admin-warning"><strong>Prototype only:</strong> this panel changes virtual available balances in this browser. It has no secure admin login, shared database, blockchain verification, or real-money payment processing. Do not use placeholder addresses for real transfers.</div>
+  const goTo = (page) => {
+    setActivePage(page);
+    setSearch('');
+    setRequestFilter('All');
+  };
 
-      <div className="admin-section-title">Trade scenario control</div>
-      <div className="admin-toggle-row"><div><strong>virtual trading: {tradeEnabled ? 'ON' : 'OFF'}</strong><small>{tradeEnabled ? 'ON shows a simulated positive result.' : 'OFF blocks trade execution and shows a simulated loss preview only.'}</small></div><button aria-label="Toggle virtual trading" className={`toggle ${tradeEnabled ? 'toggle-on' : ''}`} onClick={() => setTradeEnabled(v => !v)}><span /></button></div>
-      <p className="muted admin-help">Outcomes are clearly labeled simulations, not market-derived results. OFF does not execute a trade or deduct funds.</p>
-
-      <div className="admin-section-title">Deposit / withdrawal requests ({requests.length})</div>
-      <div className="history-tabs admin-request-tabs">{['All', 'Pending', 'Deposit', 'Withdraw'].map(t => <button key={t} className={requestFilter === t ? 'selected' : ''} onClick={() => setRequestFilter(t)}>{t}</button>)}</div>
-      {filteredRequests.length ? filteredRequests.map(r => (
-        <div className="request-card" key={r.id}>
-          <div className="request-top"><strong>{r.type} · {r.method}</strong><span className={`request-status ${(r.status || '').toLowerCase()}`}>{r.status}</span></div>
-          <div className="request-amount">{money(r.amount)} <small>USDT virtual value</small></div>
-          <small>Submitted: {r.created}</small>
-          {r.address && <div className="request-detail"><small>Destination address</small><div className="address-wrap">{r.address}</div></div>}
-          {r.fileName && <div className="request-detail"><small>Payment proof: {r.fileName}</small>{r.proofUrl ? <a href={r.proofUrl} target="_blank" rel="noreferrer"><img src={r.proofUrl} alt="Submitted deposit proof" style={{display:'block', width:'100%', maxHeight:240, objectFit:'contain', marginTop:8, borderRadius:10, background:'#111'}} /></a> : <small>No image attached to this request.</small>}</div>}
-          {r.reviewedAt && <small>Reviewed: {r.reviewedAt}</small>}
-          {r.adminNote && <div className="request-detail"><small>Admin message</small><p>{r.adminNote}</p></div>}
-          {r.status === 'Pending' && <><label className="field-label">Rejection reason / message (required to reject)</label><textarea className="text-input" rows={3} value={rejectionNotes[r.id] || ''} onChange={e => setRejectionNotes(v => ({...v, [r.id]: e.target.value}))} placeholder="Write why this request is rejected..." /><div className="request-actions"><button onClick={() => approveRequest(r.id, 'Approved', '')} className="btn btn-small btn-gold">Approve</button><button onClick={() => { const note = (rejectionNotes[r.id] || '').trim(); if (!note) { setToast('Write a rejection reason before rejecting this request.'); return; } approveRequest(r.id, 'Rejected', note); }} className="btn btn-small btn-outline">Reject</button></div></>}
-        </div>
-      )) : <div className="empty-state"><strong>No requests in this filter</strong><p>New submitted requests will appear here.</p></div>}
-     <div className="admin-section-title">
-  Advanced Borrow Requests ({advancedRequests.length})
-</div>
-
-{advancedRequests.length ? advancedRequests.map(r => (
-  <div className="request-card" key={r.id}>
-    <div className="request-top">
-      <strong>Borrow · {r.asset}</strong>
-      <span className={`request-status ${(r.status || '').toLowerCase()}`}>
-        {r.status}
-      </span>
-    </div>
-
-    <div className="request-amount">
-      {money(r.amount)}
-      <small> Requested amount</small>
-    </div>
-
-    <div className="request-detail">
-      <small>Member</small>
-      <p>{r.user_email || r.email || 'Member'}</p>
-    </div>
-
-    <div className="request-detail">
-      <small>Collateral</small>
-      <p>
-        {r.collateral_amount || 0} {r.collateral_asset || 'N/A'}
-      </p>
-    </div>
-
-    <small>
-      Submitted: {r.created_at
-        ? new Date(r.created_at).toLocaleString()
-        : 'N/A'}
-    </small>
-
-    {r.admin_note && (
-      <div className="request-detail">
-        <small>Admin message</small>
-        <p>{r.admin_note}</p>
+  const renderRequest = (r) => (
+    <div className="request-card" key={r.id}>
+      <div className="request-top">
+        <strong>{r.type} · {r.method || 'Virtual'}</strong>
+        <span className={`request-status ${(r.status || '').toLowerCase()}`}>
+          {r.status}
+        </span>
       </div>
-    )}
 
-    {r.status === 'Pending' && (
-      <>
-        <label className="field-label">
-          Rejection reason (required)
-        </label>
+      <div className="request-amount">
+        {money(r.amount)}
+        <small>Virtual demo value</small>
+      </div>
 
-        <textarea
-          className="text-input"
-          rows={3}
-          value={advancedRejectionNotes[r.id] || ''}
-          onChange={e =>
-            setAdvancedRejectionNotes(v => ({
-              ...v,
-              [r.id]: e.target.value
-            }))
-          }
-          placeholder="Write rejection reason..."
-        />
+      <div className="request-detail">
+        <small>Member</small>
+        <p>{r.email || r.user_email || 'Member'}</p>
+      </div>
 
-        <div className="request-actions">
-          <button
-            className="btn btn-small btn-gold"
-            onClick={() => reviewAdvancedRequest?.(r.id, 'Approved', '')}
-          >
-            Approve
-          </button>
+      <div className="request-detail">
+        <small>Request ID</small>
+        <p>{r.id}</p>
+      </div>
 
-          <button
-            className="btn btn-small btn-outline"
-            onClick={() => {
-              const note = (advancedRejectionNotes[r.id] || '').trim();
+      <small>Submitted: {r.created || 'N/A'}</small>
 
-              if (!note) {
-                setToast('Write a rejection reason first.');
-                return;
-              }
+      {r.reviewedAt && <p className="muted">Reviewed: {r.reviewedAt}</p>}
 
-              reviewAdvancedRequest?.(r.id, 'Rejected', note);
-            }}
-          >
-            Reject
-          </button>
+      {r.adminNote && (
+        <div className="request-detail">
+          <small>Admin message</small>
+          <p>{r.adminNote}</p>
         </div>
-      </>
-    )}
-  </div>
-)) : (
-  <div className="empty-state">
-    <strong>No borrow requests</strong>
-    <p>New Advanced Borrow requests will appear here.</p>
-  </div>
-)}
-      <div className="admin-section-title">
-  Student current balances ({members.length})
-</div>
-      <p className="muted admin-help">Approving a deposit/withdraw request only changes its status and shows the admin message. It never changes a member balance automatically. Use Add balance / Deduct balance to change the active available balance manually.</p>
-      <label className="field-label">Member email / reference</label><input className="text-input" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder="member@example.com" />
-      <label className="field-label">Amount (USDT virtual value)</label><input className="text-input" type="number" min="0.01" step="0.01" value={memberAmount} onChange={e => setMemberAmount(e.target.value)} placeholder="100.00" />
-      <div className="request-actions"><button className="btn btn-small btn-gold" onClick={() => adjustMemberBalance('add')}>＋ Add balance</button><button className="btn btn-small btn-outline" onClick={() => adjustMemberBalance('subtract')}>− Deduct balance</button></div>
-      {members.length ? members.map(m => (
-  <div className="admin-address" key={m.id}>
-    <span>
-      <strong>{m.name || 'Student'}</strong>
-      <small style={{ display: 'block', opacity: 0.7 }}>
-        {m.email}
+      )}
+
+      {r.status === 'Pending' && (
+        <>
+          <label className="field-label">Rejection reason</label>
+          <textarea
+            className="text-input"
+            rows={3}
+            value={rejectionNotes[r.id] || ''}
+            onChange={e =>
+              setRejectionNotes(v => ({ ...v, [r.id]: e.target.value }))
+            }
+            placeholder="Write rejection reason..."
+          />
+
+          <div className="request-actions">
+            <button
+              className="btn btn-small btn-gold"
+              onClick={() => approveRequest(r.id, 'Approved', '')}
+            >
+              Approve
+            </button>
+
+            <button
+              className="btn btn-small btn-outline"
+              onClick={() => {
+                const note = (rejectionNotes[r.id] || '').trim();
+                if (!note) {
+                  setToast('Write a rejection reason first.');
+                  return;
+                }
+                approveRequest(r.id, 'Rejected', note);
+              }}
+            >
+              Reject
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const renderBorrow = (r) => (
+    <div className="request-card" key={r.id}>
+      <div className="request-top">
+        <strong>Borrow · {r.asset || 'Virtual asset'}</strong>
+        <span className={`request-status ${(r.status || '').toLowerCase()}`}>
+          {r.status}
+        </span>
+      </div>
+
+      <div className="request-amount">
+        {money(r.amount)}
+        <small>Virtual demo request</small>
+      </div>
+
+      <div className="request-detail">
+        <small>Member</small>
+        <p>{r.user_email || r.email || 'Member'}</p>
+      </div>
+
+      <div className="request-detail">
+        <small>Collateral information</small>
+        <p>
+          {r.collateral_amount || 0} {r.collateral_asset || 'N/A'}
+        </p>
+      </div>
+
+      <small>
+        Submitted: {r.created_at
+          ? new Date(r.created_at).toLocaleString()
+          : 'N/A'}
       </small>
-    </span>
-    <code>{money(m.balance)} USDT</code>
-  </div>
-)) : (
-  <div className="empty-state">
-    <p>No student profiles found.</p>
-  </div>
-)}
 
-      <div className="admin-section-title">Deposit wallet addresses & QR codes</div>
+      {r.admin_note && (
+        <div className="request-detail">
+          <small>Admin message</small>
+          <p>{r.admin_note}</p>
+        </div>
+      )}
 
-<p className="muted admin-help">
-  Set each wallet address and upload its matching QR image.
-  PNG, JPG or WEBP · Maximum 5 MB.
-</p>
+      {r.status === 'Pending' && (
+        <>
+          <label className="field-label">Rejection reason</label>
+          <textarea
+            className="text-input"
+            rows={3}
+            value={advancedRejectionNotes[r.id] || ''}
+            onChange={e =>
+              setAdvancedRejectionNotes(v => ({
+                ...v,
+                [r.id]: e.target.value
+              }))
+            }
+            placeholder="Write rejection reason..."
+          />
 
-{['TRC20', 'BTC', 'ETH'].map(n => (
-  <div className="admin-address admin-address-edit" key={n}>
-    <span>{n}</span>
-    <input
-      className="text-input"
-      value={walletAddresses[n] || ''}
-      onChange={e =>
-        setWalletAddresses(v => ({
-          ...v,
-          [n]: e.target.value
-        }))
-      }
-      placeholder={`Paste ${n} address`}
-    />
+          <div className="request-actions">
+            <button
+              className="btn btn-small btn-gold"
+              onClick={() => reviewAdvancedRequest?.(r.id, 'Approved', '')}
+            >
+              Approve
+            </button>
 
-    <label className="field-label">
-      {n} QR image
-    </label>
+            <button
+              className="btn btn-small btn-outline"
+              onClick={() => {
+                const note = (advancedRejectionNotes[r.id] || '').trim();
 
-    <input
-      className="text-input"
-      type="file"
-      accept="image/png,image/jpeg,image/webp"
-      onChange={e =>
-        setQrFiles(v => ({
-          ...v,
-          [n]: e.target.files?.[0] || null
-        }))
-      }
-    />
+                if (!note) {
+                  setToast('Write a rejection reason first.');
+                  return;
+                }
 
-    {qrFiles[n] && (
-      <small>Selected: {qrFiles[n].name}</small>
-    )}
+                reviewAdvancedRequest?.(r.id, 'Rejected', note);
+              }}
+            >
+              Reject
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 
-    {walletQrCodes?.[n] && (
-      <img
-        src={walletQrCodes[n]}
-        alt={`${n} saved QR`}
-        style={{
-          display: 'block',
-          width: 150,
-          height: 150,
-          objectFit: 'contain',
-          marginTop: 10,
-          background: '#fff',
-          borderRadius: 10,
-          padding: 8
-        }}
-      />
-    )}
-  </div>
-))}
+  return (
+    <div className="admin-drawer admin-layout">
 
-<button
-  className="btn btn-gold btn-full"
-  onClick={async () => {
-    await saveWalletSettings(qrFiles);
-    setQrFiles({
-      TRC20: null,
-      BTC: null,
-      ETH: null
-    });
-  }}
->
-  Save wallet settings
-</button>
-     <div className="admin-section-title">User Activity Monitoring</div>
-<Monitoring supabase={supabase} />
-      <div className="admin-section-title">Customer care</div>
-      <label className="field-label">Telegram support URL</label><input className="text-input" value={telegramUrl} onChange={e => setTelegramUrl(e.target.value)} placeholder="https://t.me/your_support" />
-      <button className="btn btn-outline btn-full" onClick={() => setToast('Support URL updated in this browser preview only.')}>Save support link</button>
+      <aside className="admin-sidebar">
+        <div className="admin-brand">
+          <div className="admin-brand-icon">♛</div>
+          <div>
+            <strong>TradePro</strong>
+            <small>Admin Panel</small>
+          </div>
+        </div>
+
+        <nav className="admin-nav">
+          {navItems.map(item => (
+            <button
+              key={item.name}
+              className={`admin-nav-item ${activePage === item.name ? 'active' : ''}`}
+              onClick={() => goTo(item.name)}
+            >
+              <span className="admin-nav-icon">{item.icon}</span>
+              <span>{item.name}</span>
+
+              {item.name === 'Requests' && pendingCount > 0 && (
+                <b>{pendingCount}</b>
+              )}
+
+              {item.name === 'Borrow' && pendingBorrow > 0 && (
+                <b>{pendingBorrow}</b>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="admin-sidebar-footer">
+          <div className="admin-brand-icon">♛</div>
+          <strong>Admin Control</strong>
+          <p>Manage demo users, requests and platform settings</p>
+          <small>Version 1.0</small>
+        </div>
+      </aside>
+
+      <main className="admin-main">
+
+        <header className="admin-topbar">
+          <div className="admin-search">
+            <span>⌕</span>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search users, requests, email, ID..."
+            />
+          </div>
+
+          <div className="admin-topbar-right">
+            <span className="admin-online-dot" />
+            <span>Admin Online</span>
+            <button
+              className="icon-button"
+              onClick={() => setAdminOpen(false)}
+              aria-label="Close admin panel"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+
+        <div className="admin-page-heading">
+          <div>
+            <span className="eyebrow">TRADEPRO MANAGEMENT</span>
+            <h2>{activePage === 'Overview' ? 'Admin Dashboard' : activePage}</h2>
+            <p>Manage platform activities and demo records</p>
+          </div>
+        </div>
+
+        <div className="admin-warning">
+          <strong>DEMO ONLY:</strong> This dashboard uses virtual values for
+          demonstration. It does not process real payments, crypto transfers,
+          or blockchain transactions.
+        </div>
+
+        {activePage === 'Overview' && (
+          <>
+            <div className="admin-stats-grid">
+              <div className="admin-stat-card blue">
+                <span>♙</span>
+                <small>Total Users</small>
+                <strong>{members.length}</strong>
+                <p>Registered demo profiles</p>
+              </div>
+
+              <div className="admin-stat-card green">
+                <span>▣</span>
+                <small>Total Requests</small>
+                <strong>{requests.length}</strong>
+                <p>{pendingCount} pending review</p>
+              </div>
+
+              <div className="admin-stat-card purple">
+                <span>⇄</span>
+                <small>Borrow Requests</small>
+                <strong>{advancedRequests.length}</strong>
+                <p>{pendingBorrow} pending review</p>
+              </div>
+
+              <div className="admin-stat-card gold">
+                <span>$</span>
+                <small>Total Virtual Balance</small>
+                <strong>{money(totalVirtualBalance)}</strong>
+                <p>Demo balance only</p>
+              </div>
+            </div>
+
+            <div className="admin-overview-grid">
+              <section className="admin-panel-card">
+                <div className="admin-card-heading">
+                  <h3>Trade Scenario Control</h3>
+                  <span className="admin-demo-label">Demo Only</span>
+                </div>
+
+                <div className="admin-toggle-row">
+                  <div>
+                    <strong>
+                      Virtual trading: {tradeEnabled ? 'ON' : 'OFF'}
+                    </strong>
+                    <small>
+                      {tradeEnabled
+                        ? 'Shows a simulated positive result.'
+                        : 'Trade execution is disabled in this demo.'}
+                    </small>
+                  </div>
+
+                  <button
+                    aria-label="Toggle virtual trading"
+                    className={`toggle ${tradeEnabled ? 'toggle-on' : ''}`}
+                    onClick={() => setTradeEnabled(v => !v)}
+                  >
+                    <span />
+                  </button>
+                </div>
+
+                <p className="admin-help">
+                  Outcomes are simulations, not market-derived results.
+                  No real trade is executed and no real funds are moved.
+                </p>
+              </section>
+
+              <section className="admin-panel-card">
+                <div className="admin-card-heading">
+                  <h3>Recent Requests</h3>
+                  <button onClick={() => goTo('Requests')}>View all →</button>
+                </div>
+
+                {requests.slice(0, 4).length ? (
+                  requests.slice(0, 4).map(r => (
+                    <div className="admin-mini-row" key={r.id}>
+                      <div>
+                        <strong>{r.type} · {r.method || 'Virtual'}</strong>
+                        <small>{r.email || r.user_email || 'Member'}</small>
+                      </div>
+                      <span className={`request-status ${(r.status || '').toLowerCase()}`}>
+                        {r.status}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No requests yet</div>
+                )}
+              </section>
+            </div>
+
+            <div className="admin-overview-grid">
+              <section className="admin-panel-card">
+                <div className="admin-card-heading">
+                  <h3>Advanced Borrow Requests</h3>
+                  <button onClick={() => goTo('Borrow')}>View all →</button>
+                </div>
+
+                {advancedRequests.slice(0, 3).length ? (
+                  advancedRequests.slice(0, 3).map(r => (
+                    <div className="admin-mini-row" key={r.id}>
+                      <div>
+                        <strong>{r.asset || 'Virtual asset'}</strong>
+                        <small>{r.user_email || r.email || 'Member'}</small>
+                      </div>
+                      <span className={`request-status ${(r.status || '').toLowerCase()}`}>
+                        {r.status}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No borrow requests</div>
+                )}
+              </section>
+
+              <section className="admin-panel-card">
+                <div className="admin-card-heading">
+                  <h3>Platform Summary</h3>
+                </div>
+                <div className="admin-summary-line">
+                  <span>Total request value</span>
+                  <strong>{money(totalRequestValue)}</strong>
+                </div>
+                <div className="admin-summary-line">
+                  <span>Pending requests</span>
+                  <strong>{pendingCount}</strong>
+                </div>
+                <div className="admin-summary-line">
+                  <span>Registered users</span>
+                  <strong>{members.length}</strong>
+                </div>
+              </section>
+            </div>
+          </>
+        )}
+
+        {activePage === 'Requests' && (
+          <section className="admin-panel-card">
+            <div className="admin-card-heading">
+              <h3>Deposit / Withdrawal Requests ({requests.length})</h3>
+            </div>
+
+            <div className="history-tabs admin-request-tabs">
+              {['All', 'Pending', 'Deposit', 'Withdraw'].map(t => (
+                <button
+                  key={t}
+                  className={requestFilter === t ? 'selected' : ''}
+                  onClick={() => setRequestFilter(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {filteredRequests.length ? (
+              filteredRequests.map(renderRequest)
+            ) : (
+              <div className="empty-state">No requests found</div>
+            )}
+          </section>
+        )}
+
+        {activePage === 'Borrow' && (
+          <section className="admin-panel-card">
+            <div className="admin-card-heading">
+              <h3>Advanced Borrow Requests ({advancedRequests.length})</h3>
+            </div>
+
+            {advancedRequests.length ? (
+              advancedRequests
+                .filter(r => {
+                  const term = search.toLowerCase();
+                  return !term ||
+                    String(r.user_email || r.email || '').toLowerCase().includes(term) ||
+                    String(r.asset || '').toLowerCase().includes(term);
+                })
+                .map(renderBorrow)
+            ) : (
+              <div className="empty-state">No borrow requests found</div>
+            )}
+          </section>
+        )}
+
+        {activePage === 'Users' && (
+          <>
+            <section className="admin-panel-card">
+              <div className="admin-card-heading">
+                <h3>Registered Users ({members.length})</h3>
+              </div>
+
+              <div className="admin-user-table-wrap">
+                <table className="admin-user-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Email</th>
+                      <th>User ID</th>
+                      <th>Virtual Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMembers.map(m => (
+                      <tr key={m.id}>
+                        <td>{m.name || 'Student'}</td>
+                        <td>{m.email || 'N/A'}</td>
+                        <td>{m.id || 'N/A'}</td>
+                        <td>{money(m.balance)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {!filteredMembers.length && (
+                <div className="empty-state">No users found</div>
+              )}
+            </section>
+
+            <section className="admin-panel-card">
+              <div className="admin-card-heading">
+                <h3>Manage Virtual Demo Balance</h3>
+              </div>
+
+              <label className="field-label">Member email / reference</label>
+              <input
+                className="text-input"
+                value={memberEmail}
+                onChange={e => setMemberEmail(e.target.value)}
+                placeholder="member@example.com"
+              />
+
+              <label className="field-label">Amount (virtual demo value)</label>
+              <input
+                className="text-input"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={memberAmount}
+                onChange={e => setMemberAmount(e.target.value)}
+                placeholder="100.00"
+              />
+
+              <div className="request-actions">
+                <button
+                  className="btn btn-small btn-gold"
+                  onClick={() => adjustMemberBalance('add')}
+                >
+                  + Add virtual balance
+                </button>
+
+                <button
+                  className="btn btn-small btn-outline"
+                  onClick={() => adjustMemberBalance('subtract')}
+                >
+                  − Deduct virtual balance
+                </button>
+              </div>
+            </section>
+          </>
+        )}
+
+        {activePage === 'Monitoring' && (
+          <section className="admin-panel-card">
+            <div className="admin-card-heading">
+              <h3>User Activity Monitoring</h3>
+            </div>
+            <Monitoring supabase={supabase} />
+          </section>
+        )}
+
+        {activePage === 'Support' && (
+          <section className="admin-panel-card">
+            <div className="admin-card-heading">
+              <h3>Customer Care</h3>
+            </div>
+
+            <label className="field-label">Telegram support URL</label>
+            <input
+              className="text-input"
+              value={telegramUrl}
+              onChange={e => setTelegramUrl(e.target.value)}
+              placeholder="https://t.me/your_support"
+            />
+
+            <button
+              className="btn btn-outline btn-full"
+              onClick={() => setToast('Support URL updated in this browser preview only.')}
+            >
+              Save support link
+            </button>
+          </section>
+        )}
+
+        {activePage === 'Settings' && (
+          <section className="admin-panel-card">
+            <div className="admin-card-heading">
+              <h3>Platform Settings</h3>
+            </div>
+
+            <div className="admin-toggle-row">
+              <div>
+                <strong>Virtual trading scenario</strong>
+                <small>Enable or disable the simulated trading display</small>
+              </div>
+
+              <button
+                className={`toggle ${tradeEnabled ? 'toggle-on' : ''}`}
+                onClick={() => setTradeEnabled(v => !v)}
+                aria-label="Toggle virtual trading"
+              >
+                <span />
+              </button>
+            </div>
+
+            <div className="admin-warning">
+              This is a prototype dashboard. Settings here do not enable
+              real-money payment processing or crypto transfers.
+            </div>
+          </section>
+        )}
+
+        <footer className="admin-footer">
+          TradePro Admin Panel · Demo Environment
+        </footer>
+      </main>
     </div>
   );
 }
