@@ -2347,10 +2347,12 @@ const refreshAccount = async () => {
     adminNote: row.admin_note || ''
   }));
 
-  setRequests(current => [
-    ...current.filter(r => r.type !== 'Deposit'),
-    ...loadedDeposits
-  ]);
+    if (!isAdmin) {
+    setRequests(current => [
+      ...current.filter(r => r.type !== 'Deposit'),
+      ...loadedDeposits
+    ]);
+  }
 }
 
     if (profileError) {
@@ -2406,10 +2408,12 @@ const refreshAccount = async () => {
         adminNote: row.admin_note || ''
       }));
 
-      setRequests(current => [
-        ...current.filter(r => r.type !== 'Withdraw'),
-        ...loadedWithdrawals
-      ]);
+            if (!isAdmin) {
+        setRequests(current => [
+          ...current.filter(r => r.type !== 'Withdraw'),
+          ...loadedWithdrawals
+        ]);
+      }
     }
   };
 
@@ -2456,7 +2460,7 @@ const refreshAccount = async () => {
     active = false;
     supabase.removeChannel(channel);
   };
-}, [authSession?.user?.id]);
+}, [authSession?.user?.id, isAdmin]);
 
   const handleAuthSubmit = async (event) => {
     event.preventDefault()
