@@ -2538,53 +2538,49 @@ setVisitorCountry(geo.country || '');
 setLocalCurrency(currency);
 setLocalCurrencySymbol(currencySymbol);
 
-      const loadForexRate = async () => {
-        if (currency === 'USD') {
-          if (!stopped) setLocalCurrencyRate(1);
-          return;
-        }
+      
+const loadForexRate = async () => {
+  if (currency === 'USD') {
+    if (!stopped) setLocalCurrencyRate(1);
+    return;
+  }
 
-        try {
-          const apiKey = import.meta.env.VITE_TWELVEDATA_API_KEY;
-          console.log('Twelve Data key loaded:', !!apiKey);
+  try {
+    const rateResponse = await fetch(
+      'https://open.er-api.com/v6/latest/USD'
+    );
 
-          if (!apiKey) {
-            throw new Error('Twelve Data API key is missing');
-          }
+    if (!rateResponse.ok) {
+      throw new Error(`Currency API error: ${rateResponse.status}`);
+    }
 
-          const url = new URL(
-            'https://api.twelvedata.com/exchange_rate'
-          );
+    const rateData = await rateResponse.json();
+    const rate = Number(rateData.rates?.[currency]);
 
-          url.searchParams.set('symbol', `USD/${currency}`);
-          url.searchParams.set('apikey', apiKey);
+    if (
+      rateData.result !== 'success' ||
+      !Number.isFinite(rate) ||
+      rate <= 0
+    ) {
+      throw new Error(`Rate unavailable for ${currency}`);
+    }
 
-          const rateResponse = await fetch(url.toString());
-          const rateData = await rateResponse.json();
+    if (!stopped) {
+      setLocalCurrencyRate(rate);
+    }
 
-          const rate = Number(rateData.rate);
+    console.log('LOCAL CURRENCY RATE:', currency, rate);
+  } catch (error) {
+    console.error('Forex rate error:', error);
+  }
+};
 
-          if (!rateResponse.ok || !Number.isFinite(rate) || rate <= 0) {
-            throw new Error(
-              rateData.message || `Rate unavailable for ${currency}`
-            );
-          }
+await loadForexRate();
 
-          if (!stopped) {
-            setLocalCurrencyRate(rate);
-          }
-          console.log('LIVE FOREX RATE:', currency, rate);
-        } catch (error) {
-          console.error('Forex rate error:', error);
-          if (!stopped) setLocalCurrencyRate(0);
-        }
-      };
+if (!stopped) {
+  timer = setInterval(loadForexRate, 86400000);
+}
 
-      await loadForexRate();
-
-      if (!stopped) {
-        timer = setInterval(loadForexRate, 300000);
-      }
     } catch (error) {
      console.error('CURRENCY ERROR DETAILS:', error.message);
     }
