@@ -8,6 +8,7 @@ import {
   SiTesla
 } from "react-icons/si";
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import countryToCurrency from 'country-to-currency';
 import AdminPanel from './Admin.jsx'
 import CustomerService from './CustomerService.jsx'
 import { createClient } from '@supabase/supabase-js'
@@ -143,6 +144,202 @@ const marketDefinitions = [
   { symbol: 'NDX', pair: 'NDX', name: 'US Tech 100', kind: 'Index', provider: 'Twelve Data' },
   { symbol: 'DAX', pair: 'DAX', name: 'Germany 40', kind: 'Index', provider: 'Twelve Data' },
   { symbol: 'DJI', pair: 'DJI', name: 'Wall Street', kind: 'Index', provider: 'Twelve Data' },
+]
+// Names and order are taken from the supplied Top 200 list; prices are never taken from that snapshot.
+const requestedCryptoAssets = [
+  { symbol: "BTC", name: "Bitcoin" },
+  { symbol: "ETH", name: "Ethereum" },
+  { symbol: "USDT", name: "Tether USDt" },
+  { symbol: "BNB", name: "BNB" },
+  { symbol: "USDC", name: "USDC" },
+  { symbol: "XRP", name: "XRP" },
+  { symbol: "SOL", name: "Solana" },
+  { symbol: "TRX", name: "TRON" },
+  { symbol: "HYPE", name: "Hyperliquid" },
+  { symbol: "ZEC", name: "Zcash" },
+  { symbol: "XMR", name: "Monero" },
+  { symbol: "DOGE", name: "Dogecoin" },
+  { symbol: "LEO", name: "UNUS SED LEO" },
+  { symbol: "LINK", name: "Chainlink" },
+  { symbol: "ADA", name: "Cardano" },
+  { symbol: "USDE", name: "Ethena USDe" },
+  { symbol: "XLM", name: "Stellar" },
+  { symbol: "DAI", name: "Dai" },
+  { symbol: "NEAR", name: "NEAR Protocol" },
+  { symbol: "BCH", name: "Bitcoin Cash" },
+  { symbol: "LTC", name: "Litecoin" },
+  { symbol: "CC", name: "Canton" },
+  { symbol: "UNI", name: "Uniswap" },
+  { symbol: "AVAX", name: "Avalanche" },
+  { symbol: "GRAM", name: "Gram (prev. Toncoin)" },
+  { symbol: "USD1", name: "World Liberty Financial USD" },
+  { symbol: "SUI", name: "Sui" },
+  { symbol: "XAUT", name: "Tether Gold" },
+  { symbol: "RLUSD", name: "Ripple USD" },
+  { symbol: "USDG", name: "Global Dollar" },
+  { symbol: "HBAR", name: "Hedera" },
+  { symbol: "PYUSD", name: "PayPal USD" },
+  { symbol: "SHIB", name: "Shiba Inu" },
+  { symbol: "CRO", name: "Cronos" },
+  { symbol: "TAO", name: "Bittensor" },
+  { symbol: "QNT", name: "Quant" },
+  { symbol: "OKB", name: "OKB" },
+  { symbol: "PAXG", name: "PAX Gold" },
+  { symbol: "AAVE", name: "Aave" },
+  { symbol: "PEPE", name: "Pepe" },
+  { symbol: "ENA", name: "Ethena" },
+  { symbol: "ASTER", name: "Aster" },
+  { symbol: "ONDO", name: "Ondo" },
+  { symbol: "WLFI", name: "World Liberty Financial" },
+  { symbol: "USDD", name: "USDD" },
+  { symbol: "ICP", name: "Internet Computer" },
+  { symbol: "PUMP", name: "Pump.fun" },
+  { symbol: "DOT", name: "Polkadot" },
+  { symbol: "MNT", name: "Mantle" },
+  { symbol: "SKY", name: "Sky" },
+  { symbol: "JST", name: "JUST" },
+  { symbol: "BGB", name: "Bitget Token" },
+  { symbol: "WLD", name: "Worldcoin" },
+  { symbol: "MORPHO", name: "Morpho" },
+  { symbol: "VVV", name: "Venice Token" },
+  { symbol: "ETC", name: "Ethereum Classic" },
+  { symbol: "ARB", name: "Arbitrum" },
+  { symbol: "KCS", name: "KuCoin Token" },
+  { symbol: "POL", name: "Polygon (prev. MATIC)" },
+  { symbol: "JUP", name: "Jupiter" },
+  { symbol: "GT", name: "GateToken" },
+  { symbol: "RENDER", name: "Render" },
+  { symbol: "NIGHT", name: "Midnight" },
+  { symbol: "KAS", name: "Kaspa" },
+  { symbol: "ALGO", name: "Algorand" },
+  { symbol: "ATOM", name: "Cosmos" },
+  { symbol: "PI", name: "Pi" },
+  { symbol: "INJ", name: "Injective" },
+  { symbol: "LIT", name: "Lighter" },
+  { symbol: "XDC", name: "XDC Network" },
+  { symbol: "PIEVERSE", name: "Pieverse" },
+  { symbol: "ZRO", name: "LayerZero" },
+  { symbol: "FIL", name: "Filecoin" },
+  { symbol: "CAKE", name: "PancakeSwap" },
+  { symbol: "TUSD", name: "TrueUSD" },
+  { symbol: "STX", name: "Stacks" },
+  { symbol: "DASH", name: "Dash" },
+  { symbol: "ETHFI", name: "ether.fi" },
+  { symbol: "AERO", name: "Aero" },
+  { symbol: "STABLE", name: "Stable" },
+  { symbol: "EURC", name: "EURC" },
+  { symbol: "NEXO", name: "Nexo" },
+  { symbol: "FLR", name: "Flare" },
+  { symbol: "VET", name: "VeChain" },
+  { symbol: "PYTH", name: "Pyth Network" },
+  { symbol: "APT", name: "Aptos" },
+  { symbol: "RAY", name: "Raydium" },
+  { symbol: "KITE", name: "Kite" },
+  { symbol: "FF", name: "Falcon Finance" },
+  { symbol: "TIA", name: "Celestia" },
+  { symbol: "CRV", name: "Curve DAO Token" },
+  { symbol: "FET", name: "Artificial Superintelligence Alliance" },
+  { symbol: "PENGU", name: "Pudgy Penguins" },
+  { symbol: "SEI", name: "Sei" },
+  { symbol: "BTT", name: "BitTorrent [New]" },
+  { symbol: "BSV", name: "Bitcoin SV" },
+  { symbol: "VIRTUAL", name: "Virtuals Protocol" },
+  { symbol: "SUN", name: "Sun [New]" },
+  { symbol: "SPX", name: "SPX6900" },
+  { symbol: "FDUSD", name: "First Digital USD" },
+  { symbol: "STRK", name: "Starknet" },
+  { symbol: "TRUMP", name: "OFFICIAL TRUMP" },
+  { symbol: "PENDLE", name: "Pendle" },
+  { symbol: "GNO", name: "Gnosis" },
+  { symbol: "XTZ", name: "Tezos" },
+  { symbol: "LDO", name: "Lido DAO" },
+  { symbol: "XPL", name: "Plasma" },
+  { symbol: "BONK", name: "Bonk" },
+  { symbol: "BEAM", name: "Beam" },
+  { symbol: "LUNC", name: "Terra Classic" },
+  { symbol: "IMX", name: "Immutable" },
+  { symbol: "KAIA", name: "Kaia" },
+  { symbol: "NFT", name: "AINFT" },
+  { symbol: "GRT", name: "The Graph" },
+  { symbol: "OP", name: "Optimism" },
+  { symbol: "DCR", name: "Decred" },
+  { symbol: "CFX", name: "Conflux" },
+  { symbol: "COMP", name: "Compound" },
+  { symbol: "MON", name: "Monad" },
+  { symbol: "FLOKI", name: "FLOKI" },
+  { symbol: "ZBCN", name: "Zebec Network" },
+  { symbol: "RUNE", name: "THORChain" },
+  { symbol: "KMNO", name: "Kamino" },
+  { symbol: "ENS", name: "Ethereum Name Service" },
+  { symbol: "JASMY", name: "JasmyCoin" },
+  { symbol: "AR", name: "Arweave" },
+  { symbol: "CAP", name: "Cap" },
+  { symbol: "TWT", name: "Trust Wallet Token" },
+  { symbol: "IOTA", name: "IOTA" },
+  { symbol: "MET", name: "Meteora" },
+  { symbol: "FLUID", name: "Fluid" },
+  { symbol: "TRAC", name: "OriginTrail" },
+  { symbol: "AKT", name: "Akash Network" },
+  { symbol: "JTO", name: "Jito" },
+  { symbol: "SOON", name: "SOON" },
+  { symbol: "BAT", name: "Basic Attention Token" },
+  { symbol: "ZAMA", name: "Zama" },
+  { symbol: "CVX", name: "Convex Finance" },
+  { symbol: "TEL", name: "Telcoin" },
+  { symbol: "GOMINING", name: "GoМining" },
+  { symbol: "EIGEN", name: "EigenCloud" },
+  { symbol: "WIF", name: "dogwifhat" },
+  { symbol: "THETA", name: "Theta Network" },
+  { symbol: "MX", name: "MX Token" },
+  { symbol: "SYRUP", name: "Maple Finance" },
+  { symbol: "SENT", name: "Sentient" },
+  { symbol: "XCN", name: "Onyxcoin" },
+  { symbol: "MANA", name: "Decentraland" },
+  { symbol: "AXS", name: "Axie Infinity" },
+  { symbol: "VSN", name: "Vision" },
+  { symbol: "NEO", name: "Neo" },
+  { symbol: "AWE", name: "AWE" },
+  { symbol: "XEC", name: "eCash" },
+  { symbol: "SAND", name: "The Sandbox" },
+  { symbol: "CHZ", name: "Chiliz" },
+  { symbol: "EDGE", name: "edgeX" },
+  { symbol: "AIOZ", name: "AIOZ Network" },
+  { symbol: "GEOD", name: "GEODNET" },
+  { symbol: "GRASS", name: "Grass" },
+  { symbol: "1INCH", name: "1inch" },
+  { symbol: "USELESS", name: "Useless Coin" },
+  { symbol: "PROM", name: "Prom" },
+  { symbol: "FARTCOIN", name: "Fartcoin" },
+  { symbol: "DEXE", name: "DeXe" },
+  { symbol: "GENIUS", name: "Genius Terminal" },
+  { symbol: "GLM", name: "Golem" },
+  { symbol: "ZK", name: "ZKsync" },
+  { symbol: "SFP", name: "SafePal" },
+  { symbol: "SUPER", name: "SuperVerse" },
+  { symbol: "PLUME", name: "Plume" },
+  { symbol: "RSR", name: "Reserve Rights" },
+  { symbol: "ATH", name: "Aethir" },
+  { symbol: "PONS", name: "Pons" },
+  { symbol: "EGLD", name: "MultiversX" },
+  { symbol: "APE", name: "ApeCoin" },
+  { symbol: "GMX", name: "GMX" },
+  { symbol: "ZEN", name: "Horizen" },
+  { symbol: "0G", name: "0G" },
+  { symbol: "DEEP", name: "DeepBook Protocol" },
+  { symbol: "DOG", name: "Dog (Bitcoin)" },
+  { symbol: "ORCA", name: "Orca" },
+  { symbol: "GALA", name: "Gala" },
+  { symbol: "QTUM", name: "Qtum" },
+  { symbol: "ZRX", name: "0x Protocol" },
+  { symbol: "DYDX", name: "dYdX" },
+  { symbol: "FTT", name: "FTX Token" },
+  { symbol: "FORM", name: "Four" },
+  { symbol: "WAL", name: "Walrus" },
+  { symbol: "PEAQ", name: "peaq" },
+  { symbol: "GAS", name: "Gas" },
+  { symbol: "RED", name: "RedStone" },
+  { symbol: "YFI", name: "Yearn" },
+  { symbol: "MINA", name: "Mina" }
 ]
 const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const quotePrice = (n, symbol) => {
@@ -870,7 +1067,7 @@ const authButtonTranslations = {
 Object.entries(authButtonTranslations).forEach(([code, values]) => {
   Object.assign(uiTranslations[code], values);
 });
-function MarketIcon({ symbol }) {
+function MarketIcon({ symbol, kind }) {
   const key = String(symbol || '')
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
@@ -952,7 +1149,42 @@ function MarketIcon({ symbol }) {
       </div>
     );
   }
-
+// Load individual logos for additional Binance crypto coins
+if (kind === 'Crypto' && !icons[key]) {
+  return (
+    <div className="market-icon">
+      <img
+        src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${key.toLowerCase()}.png`}
+        alt={key}
+        width="36"
+        height="36"
+        style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '50%',
+          objectFit: 'contain'
+        }}
+        onError={e => {
+          e.currentTarget.style.display = 'none';
+          e.currentTarget.nextElementSibling.style.display = 'grid';
+        }}
+      />
+      <span style={{
+        display: 'none',
+        width: '36px',
+        height: '36px',
+        borderRadius: '50%',
+        background: '#30343b',
+        color: '#ffffff',
+        fontSize: '11px',
+        fontWeight: 700,
+        placeItems: 'center'
+      }}>
+        {key.slice(0, 4)}
+      </span>
+    </div>
+  );
+}
   // Existing crypto and stock icons
   return (
     <div
@@ -1390,8 +1622,16 @@ const filteredEarnPositions = earnPositions.filter(position => {
   return matchesSearch && matchesType;
 });
   const [marketFilter, setMarketFilter] = useState('All')
+  const [marketSearch, setMarketSearch] = useState('');
+const [cryptoMarkets, setCryptoMarkets] = useState([]);
+const [cryptoRanking, setCryptoRanking] = useState([]);
+const [cryptoSparkline, setCryptoSparkline] = useState({});
   const [selected, setSelected] = useState('BTC')
   const [selectedAsset, setSelectedAsset] = useState('BTC');
+  const [visitorCountry, setVisitorCountry] = useState('');
+const [localCurrency, setLocalCurrency] = useState('USD');
+const [localCurrencyRate, setLocalCurrencyRate] = useState(0);
+const [localCurrencySymbol, setLocalCurrencySymbol] = useState('$');
   const [assetsWalletTab, setAssetsWalletTab] = useState('Spot');
   const [selectedAssetWallet, setSelectedAssetWallet] = useState('Spot');
   const [assetsAction, setAssetsAction] = useState('');
@@ -2057,6 +2297,405 @@ const pnlPercentage =
 useEffect(() => {
   chartTimeframeRef.current = chartTimeframe;
 }, [chartTimeframe]);
+
+// Load real Binance USDT Spot markets for the requested Top 200 coins
+useEffect(() => {
+  let active = true;
+
+  const loadBinanceSpotMarkets = async () => {
+    try {
+      setMarketConnection(v => ({
+        ...v,
+        crypto: 'loading Binance Spot markets'
+      }));
+
+      const [exchangeResponse, tickerResponse] = await Promise.all([
+        fetch('https://data-api.binance.vision/api/v3/exchangeInfo'),
+        fetch('https://data-api.binance.vision/api/v3/ticker/24hr')
+      ]);
+
+      if (!exchangeResponse.ok || !tickerResponse.ok) {
+        throw new Error('Binance market API request failed');
+      }
+
+      const exchangeData = await exchangeResponse.json();
+      const tickerData = await tickerResponse.json();
+
+      if (!active) return;
+
+      const tickerMap = new Map(
+        tickerData.map(item => [item.symbol, item])
+      );
+
+      const requestedMap = new Map(
+        requestedCryptoAssets.map(item => [item.symbol, item.name])
+      );
+
+      const markets = exchangeData.symbols
+        .filter(item =>
+          item.status === 'TRADING' &&
+          item.quoteAsset === 'USDT' &&
+          item.isSpotTradingAllowed === true &&
+          requestedMap.has(item.baseAsset) &&
+          tickerMap.has(item.symbol)
+        )
+        .map(item => {
+          const ticker = tickerMap.get(item.symbol);
+
+          return {
+            symbol: item.baseAsset,
+            pair: item.symbol,
+            name: requestedMap.get(item.baseAsset),
+            kind: 'Crypto',
+            provider: 'Binance',
+            marketType: 'Spot',
+            price: Number(ticker.lastPrice),
+            change: Number(ticker.priceChangePercent),
+            volume: Number(ticker.quoteVolume),
+            high: Number(ticker.highPrice),
+            low: Number(ticker.lowPrice),
+            updatedAt: Date.now()
+          };
+        });
+
+      const orderMap = new Map(
+        requestedCryptoAssets.map((item, index) => [item.symbol, index])
+      );
+
+      markets.sort(
+        (a, b) =>
+          orderMap.get(a.symbol) - orderMap.get(b.symbol)
+      );
+
+      if (active) {
+        setCryptoMarkets(markets);
+        setMarketConnection(v => ({
+          ...v,
+          crypto: 'live'
+        }));
+      }
+    } catch (error) {
+      console.error('Binance Spot market loading failed:', error);
+
+      if (active) {
+        setMarketConnection(v => ({
+          ...v,
+          crypto: 'disconnected'
+        }));
+      }
+    }
+  };
+
+  loadBinanceSpotMarkets();
+
+  return () => {
+    active = false;
+  };
+}, []);
+
+// Real-time Binance Spot ticker updates
+useEffect(() => {
+  if (!cryptoMarkets.length) return;
+
+  const ws = new WebSocket(
+    'wss://data-stream.binance.vision:443/ws/!ticker@arr'
+  );
+
+  ws.onmessage = (event) => {
+    try {
+      const tickers = JSON.parse(event.data);
+      const updates = new Map();
+
+      tickers.forEach(ticker => {
+        if (ticker.s && ticker.s.endsWith('USDT')) {
+          updates.set(ticker.s, ticker);
+        }
+      });
+
+      setCryptoMarkets(previous =>
+        previous.map(market => {
+          const ticker = updates.get(market.pair);
+          if (!ticker) return market;
+
+          return {
+            ...market,
+            price: Number(ticker.c),
+            change: Number(ticker.P),
+            volume: Number(ticker.q),
+            high: Number(ticker.h),
+            low: Number(ticker.l),
+            updatedAt: Date.now()
+          };
+        })
+      );
+    } catch (error) {
+      console.error('Binance ticker update error:', error);
+    }
+  };
+
+  ws.onerror = (error) => {
+    console.error('Binance ticker WebSocket error:', error);
+  };
+
+  ws.onclose = () => {
+    console.log('Binance ticker WebSocket disconnected');
+  };
+
+  return () => {
+    ws.close();
+  };
+}, [cryptoMarkets.length]);
+
+// CoinMarketCap-style Crypto Ranking Data
+useEffect(() => {
+  let stopped = false;
+  let timer;
+
+  const loadCryptoRanking = async () => {
+    try {
+      const url = new URL(
+        'https://api.coingecko.com/api/v3/coins/markets'
+      );
+
+      url.searchParams.set('vs_currency', 'usd');
+      url.searchParams.set('order', 'market_cap_desc');
+      url.searchParams.set('per_page', '200');
+      url.searchParams.set('page', '1');
+      url.searchParams.set('sparkline', 'true');
+      url.searchParams.set(
+        'price_change_percentage',
+        '1h,24h,7d'
+      );
+
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        throw new Error(`CoinGecko HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!stopped && Array.isArray(data)) {
+        setCryptoRanking(data);
+      }
+    } catch (error) {
+      console.error('Crypto ranking load failed:', error);
+    }
+
+    if (!stopped) {
+      timer = setTimeout(loadCryptoRanking, 300000);
+    }
+  };
+
+  loadCryptoRanking();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, []);
+
+// Detect visitor country and fetch live Forex rate
+useEffect(() => {
+  let stopped = false;
+  let timer;
+
+  const loadVisitorCurrency = async () => {
+    try {
+      const geoResponse = await fetch('https://ipwho.is/');
+      if (!geoResponse.ok) {
+        throw new Error('IP location request failed');
+      }
+const geo = await geoResponse.json();
+console.log('IP GEO RESPONSE:', geo);
+
+if (stopped) return;
+
+if (geo.success === false || !geo.country_code) {
+  throw new Error('IP country detection failed');
+}
+console.log('COUNTRY CURRENCY LOOKUP:', geo.country_code);
+
+const currency = countryToCurrency[geo.country_code];
+console.log('VISITOR COUNTRY:', geo.country);
+console.log('VISITOR COUNTRY CODE:', geo.country_code);
+console.log('DETECTED CURRENCY:', currency);
+if (!currency) {
+  throw new Error(
+    `Currency mapping unavailable for ${geo.country_code}`
+  );
+}
+
+const currencySymbol =
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency
+  })
+    .formatToParts(0)
+    .find(part => part.type === 'currency')?.value || currency;
+
+setVisitorCountry(geo.country || '');
+setLocalCurrency(currency);
+setLocalCurrencySymbol(currencySymbol);
+
+      const loadForexRate = async () => {
+        if (currency === 'USD') {
+          if (!stopped) setLocalCurrencyRate(1);
+          return;
+        }
+
+        try {
+          const apiKey = import.meta.env.VITE_TWELVEDATA_API_KEY;
+          console.log('Twelve Data key loaded:', !!apiKey);
+
+          if (!apiKey) {
+            throw new Error('Twelve Data API key is missing');
+          }
+
+          const url = new URL(
+            'https://api.twelvedata.com/exchange_rate'
+          );
+
+          url.searchParams.set('symbol', `USD/${currency}`);
+          url.searchParams.set('apikey', apiKey);
+
+          const rateResponse = await fetch(url.toString());
+          const rateData = await rateResponse.json();
+
+          const rate = Number(rateData.rate);
+
+          if (!rateResponse.ok || !Number.isFinite(rate) || rate <= 0) {
+            throw new Error(
+              rateData.message || `Rate unavailable for ${currency}`
+            );
+          }
+
+          if (!stopped) {
+            setLocalCurrencyRate(rate);
+          }
+          console.log('LIVE FOREX RATE:', currency, rate);
+        } catch (error) {
+          console.error('Forex rate error:', error);
+          if (!stopped) setLocalCurrencyRate(0);
+        }
+      };
+
+      await loadForexRate();
+
+      if (!stopped) {
+        timer = setInterval(loadForexRate, 300000);
+      }
+    } catch (error) {
+     console.error('CURRENCY ERROR DETAILS:', error.message);
+    }
+  };
+
+  loadVisitorCurrency();
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}, []);
+
+
+// Real-time Binance Kline data for individual crypto charts
+useEffect(() => {
+  if (!cryptoMarkets.length) return;
+
+  const symbols = cryptoMarkets.map(m => m.pair.toLowerCase());
+
+  const ws = new WebSocket(
+    'wss://data-stream.binance.vision:443/ws'
+  );
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      method: 'SUBSCRIBE',
+      params: symbols.map(symbol => `${symbol}@kline_${chartTimeframe}`),
+      id: 1
+    }));
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+
+      if (message.e !== 'kline' || !message.k) return;
+
+      const symbol = message.s;
+      const candleTime = message.k.t;
+      const closePrice = Number(message.k.c);
+
+      if (!symbol || !Number.isFinite(closePrice)) return;
+
+      setCryptoSparkline(previous => {
+        const oldPrices = previous[symbol] || [];
+        const last = oldPrices[oldPrices.length - 1];
+
+        let updatedPrices;
+
+        if (last && last.time === candleTime) {
+          updatedPrices = [
+            ...oldPrices.slice(0, -1),
+            { time: candleTime, price: closePrice }
+          ];
+        } else {
+          updatedPrices = [
+            ...oldPrices,
+            { time: candleTime, price: closePrice }
+          ].slice(-30);
+        }
+
+        return {
+          ...previous,
+          [symbol]: updatedPrices
+        };
+      });
+            const baseSymbol = symbol.replace(/USDT$/, '');
+      const k = message.k;
+
+      setLiveCandles(previous => {
+        const oldCandles = previous[baseSymbol] || [];
+
+        const candle = {
+          time: Number(k.t),
+          open: Number(k.o),
+          high: Number(k.h),
+          low: Number(k.l),
+          close: Number(k.c),
+          up: Number(k.c) >= Number(k.o)
+        };
+
+        const next = [...oldCandles];
+        const last = next[next.length - 1];
+
+        if (last?.time === candle.time) {
+          next[next.length - 1] = candle;
+        } else {
+          next.push(candle);
+        }
+
+        return {
+          ...previous,
+          [baseSymbol]: next.slice(-500)
+        };
+      });
+    } catch (error) {
+      console.error('Binance Kline update error:', error);
+    }
+  };
+
+  ws.onerror = (error) => {
+    console.error('Binance Kline WebSocket error:', error);
+  };
+
+  return () => {
+    ws.close();
+  };
+}, [cryptoMarkets.map(m => m.pair).join(','), chartTimeframe]);
+
+
 useEffect(() => {
   if (!authSession?.user?.id) return;
 
@@ -2535,118 +3174,206 @@ const refreshAccount = async () => {
       setToast(error?.message || 'Authentication failed. Check Supabase Auth settings.')
     } finally { setAuthBusy(false) }
   }
-  const markets = marketDefinitions.map(m => ({ ...m, ...(livePrices[m.symbol] || {}), price: livePrices[m.symbol]?.price ?? null, change: livePrices[m.symbol]?.change ?? null }))
+  const markets = [
+  ...marketDefinitions
+    .filter(m => m.kind !== 'Crypto')
+    .map(m => ({
+      ...m,
+      ...(livePrices[m.symbol] || {}),
+      price: livePrices[m.symbol]?.price ?? null,
+      change: livePrices[m.symbol]?.change ?? null
+    })),
+  ...cryptoMarkets
+];
   const asset = markets.find(m => m.symbol === selected) || markets[0]
+useEffect(() => {
+  let retryTimer;
+  let closed = false;
 
-  useEffect(() => {
-    let retryTimer
-    let closed = false
-    const streams = ['btcusdt', 'ethusdt', 'solusdt'].flatMap(s => [`${s}@ticker`, `${s}@kline_1m`]).join('/')
-    let cryptoSocket
-    const connectCrypto = () => {
-      if (closed) return
-      cryptoSocket = new WebSocket(`wss://data-stream.binance.vision:443/stream?streams=${streams}`)
-      cryptoSocket.onopen = () => setMarketConnection(v => ({ ...v, crypto: 'live' }))
-      cryptoSocket.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data)
-          const d = message.data
-          if (d.e === '24hrTicker') {
-            const symbol = d.s.replace('USDT', '')
-            setLivePrices(prev => ({ ...prev, [symbol]: { price: Number(d.c), change: Number(d.P), updatedAt: Date.now(), source: 'Binance live' } }))
-          } else if (d.e === 'kline' && chartTimeframe === '1m') {
-            const symbol = d.s.replace('USDT', '')
-            const k = d.k
-            setLiveCandles(prev => {
-              const next = [...(prev[symbol] || [])]
-              const candle = { time: k.t, open: Number(k.o), high: Number(k.h), low: Number(k.l), close: Number(k.c), up: Number(k.c) >= Number(k.o) }
-              const last = next[next.length - 1]
-              if (last?.time === candle.time) next[next.length - 1] = candle; else next.push(candle)
-              return { ...prev, [symbol]: next.slice(-60) }
-            })
-          }
-        } catch { /* ignore malformed feed messages */ }
-      }
-      cryptoSocket.onerror = () => setMarketConnection(v => ({ ...v, crypto: 'disconnected' }))
-      cryptoSocket.onclose = () => { setMarketConnection(v => ({ ...v, crypto: 'reconnecting' })); if (!closed) retryTimer = setTimeout(connectCrypto, 2500) }
-    }
-    connectCrypto()
+  const streams = cryptoMarkets
+    .map(m => m.pair.toLowerCase())
+    .flatMap(s => [
+      `${s}@ticker`,
+      `${s}@kline_${chartTimeframe}`
+    ])
+    .join('/');
 
-      const providerSymbols = {
-  USDT: 'USDT/USD',
-  AAPL: 'AAPL',
-  NVDA: 'NVDA',
-  TSLA: 'TSLA',
-  GBPUSD: 'GBP/USD',
-  EURUSD: 'EUR/USD',
-  USDJPY: 'USD/JPY',
-  SPX: 'SPX',
-  NDX: 'NDX',
-  DAX: 'DAX',
-  DJI: 'DJI'
-}
+  let cryptoSocket;
 
-    let pricePollTimer
-    let pricePollStopped = false
+  const connectCrypto = () => {
+    if (closed || !streams) return;
 
-    const updateOtherPrices = async () => {
-      if (closed || pricePollStopped) return
+    cryptoSocket = new WebSocket(
+      `wss://data-stream.binance.vision:443/stream?streams=${streams}`
+    );
 
-      const symbols = Object.entries(providerSymbols)
+    cryptoSocket.onopen = () => {
+      setMarketConnection(v => ({ ...v, crypto: 'live' }));
+    };
 
-      await Promise.allSettled(
-        symbols.map(async ([symbol, providerSymbol]) => {
-          const url = new URL('/api/market', window.location.origin)
-          url.searchParams.set('symbol', providerSymbol)
+    cryptoSocket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        const d = message.data;
 
-          const response = await fetch(url.toString())
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        if (!d) return;
 
-          const data = await response.json()
-          const price = Number(data.price)
+        if (d.e === '24hrTicker') {
+          const symbol = d.s.replace('USDT', '');
 
-          if (!Number.isFinite(price) || price <= 0) {
-            throw new Error('Invalid market price')
-          }
+          setLivePrices(prev => ({
+            ...prev,
+            [symbol]: {
+              price: Number(d.c),
+              change: Number(d.P),
+              updatedAt: Date.now(),
+              source: 'Binance live'
+            }
+          }));
+        }
 
-          const now = Date.now()
+        if (d.e === 'kline') {
+          const symbol = d.s.replace('USDT', '');
+          const k = d.k;
 
-          setLivePrices(prev => {
-            const old = prev[symbol] || {}
-            const base = old.sessionStartPrice || old.price || price
-            const change = base ? ((price - base) / base) * 100 : null
+          setLiveCandles(prev => {
+            const next = [...(prev[symbol] || [])];
+
+            const candle = {
+              time: Number(k.t),
+              open: Number(k.o),
+              high: Number(k.h),
+              low: Number(k.l),
+              close: Number(k.c),
+              up: Number(k.c) >= Number(k.o)
+            };
+
+            const last = next[next.length - 1];
+
+            if (last?.time === candle.time) {
+              next[next.length - 1] = candle;
+            } else {
+              next.push(candle);
+            }
 
             return {
               ...prev,
-              [symbol]: {
-                ...old,
-                price,
-                change,
-                sessionStartPrice: base,
-                updatedAt: now,
-                source: 'Twelve Data API'
-              }
-            }
-          })
-        })
-      )
-
-      if (!closed && !pricePollStopped) {
-        setMarketConnection(v => ({ ...v, other: 'polling API' }))
-        pricePollTimer = setTimeout(updateOtherPrices, 15000)
+              [symbol]: next.slice(-500)
+            };
+          });
+        }
+      } catch (error) {
+        console.error('Binance WebSocket error:', error);
       }
+    };
+
+    cryptoSocket.onerror = () => {
+      setMarketConnection(v => ({
+        ...v,
+        crypto: 'disconnected'
+      }));
+    };
+
+    cryptoSocket.onclose = () => {
+      setMarketConnection(v => ({
+        ...v,
+        crypto: 'reconnecting'
+      }));
+
+      if (!closed) {
+        retryTimer = setTimeout(connectCrypto, 2500);
+      }
+    };
+  };
+
+  connectCrypto();
+
+  const providerSymbols = {
+    USDT: 'USDT/USD',
+    AAPL: 'AAPL',
+    NVDA: 'NVDA',
+    TSLA: 'TSLA',
+    GBPUSD: 'GBP/USD',
+    EURUSD: 'EUR/USD',
+    USDJPY: 'USD/JPY',
+    SPX: 'SPX',
+    NDX: 'NDX',
+    DAX: 'DAX',
+    DJI: 'DJI'
+  };
+
+  let pricePollTimer;
+  let pricePollStopped = false;
+
+  const updateOtherPrices = async () => {
+    if (closed || pricePollStopped) return;
+
+    const symbols = Object.entries(providerSymbols);
+
+    await Promise.allSettled(
+      symbols.map(async ([symbol, providerSymbol]) => {
+        const url = new URL('/api/market', window.location.origin);
+        url.searchParams.set('symbol', providerSymbol);
+
+        const response = await fetch(url.toString());
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const price = Number(data.price);
+
+        if (!Number.isFinite(price) || price <= 0) {
+          throw new Error('Invalid market price');
+        }
+
+        const now = Date.now();
+
+        setLivePrices(prev => {
+          const old = prev[symbol] || {};
+          const base = old.sessionStartPrice || old.price || price;
+          const change = base
+            ? ((price - base) / base) * 100
+            : null;
+
+          return {
+            ...prev,
+            [symbol]: {
+              ...old,
+              price,
+              change,
+              sessionStartPrice: base,
+              updatedAt: now,
+              source: 'Twelve Data API'
+            }
+          };
+        });
+      })
+    );
+
+    if (!closed && !pricePollStopped) {
+      setMarketConnection(v => ({
+        ...v,
+        other: 'polling API'
+      }));
+
+      pricePollTimer = setTimeout(updateOtherPrices, 15000);
     }
+  };
 
-    updateOtherPrices()
+  updateOtherPrices();
 
-return () => {
-  closed = true
-  pricePollStopped = true
-  clearTimeout(retryTimer)
-  clearTimeout(pricePollTimer)
-  cryptoSocket?.close()
-}
-}, [])
+  return () => {
+    closed = true;
+    pricePollStopped = true;
+
+    clearTimeout(retryTimer);
+    clearTimeout(pricePollTimer);
+
+    cryptoSocket?.close();
+  };
+}, [cryptoMarkets, chartTimeframe]);
 
   useEffect(() => {
   if (!authSession?.user?.id) return;
@@ -2655,7 +3382,10 @@ return () => {
 }, [page, authSession?.user?.id]);
   // Load historical candles for the selected market and chart timeframe.
 useEffect(() => {
-  const market = marketDefinitions.find(m => m.symbol === selected)
+  const market = [
+  ...marketDefinitions,
+  ...cryptoMarkets
+].find(m => m.symbol === selected)
 
   if (!market || market.symbol === 'XAU') return
 
@@ -3016,7 +3746,20 @@ const adjustMemberBalance = async (action = memberAction) => {
   );
 };
 
-  const filterMarkets = markets.filter(m => marketFilter === 'All' || m.kind === marketFilter)
+  const filterMarkets = markets.filter(m => {
+  const matchesFilter =
+    marketFilter === 'All' || m.kind === marketFilter;
+
+  const searchText = marketSearch.trim().toLowerCase();
+
+  const matchesSearch =
+    !searchText ||
+    m.symbol?.toLowerCase().includes(searchText) ||
+    m.pair?.toLowerCase().includes(searchText) ||
+    m.name?.toLowerCase().includes(searchText);
+
+  return matchesFilter && matchesSearch;
+});
 
   useEffect(() => {
     if (!trade || remaining <= 0) return
@@ -3874,7 +4617,14 @@ if (!authSession && !isAdminRoute) {
   <div className="wallet-total">
   ${fundingTotalUSDT.toFixed(2)} USDT
 </div>
-
+<div className="wallet-local-currency">
+  {localCurrencyRate > 0
+    ? `≈ ${localCurrencySymbol}${(fundingTotalUSDT * localCurrencyRate).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })} ${localCurrency}`
+    : `Local currency rate unavailable`}
+</div>
   <div className="wallet-available">
     ● Available funds · ≈ {availableAmount.toFixed(8)} {selectedAsset}
   </div>
@@ -3906,18 +4656,259 @@ if (!authSession && !isAdminRoute) {
 <div className="ticker-wrap"></div><div className="eyebrow">LIVE MARKET OVERVIEW</div><h1>Trade CFDs with the world’s No.1 provider1.</h1><p className="hero-subtitle"></p><p className="muted">Go long or short on 17,000+ markets and earn up to $2,500 in cashback.2</p></div></div>
           <div className="ticker-wrap"><div className="ticker-track">{[...markets, ...markets].map((m, i) => <div className="ticker-item" key={`${m.symbol}-${i}`}><strong>{m.name}</strong><span>{quotePrice(m.price, m.symbol)}</span><small className={m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}>{m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}</small></div>)}</div></div>
           <div className="section-heading"><div><h2>Access 17,000+ markets all in one</h2></div><div className="filter-tabs">{['All', 'Crypto', 'Commodity', 'Stock', 'Forex', 'Index'].map(f => <button key={f} onClick={() => setMarketFilter(f)} className={marketFilter === f ? 'selected' : ''}>{f === 'Commodity' ? 'Gold' : f === 'Stock' ? 'Stocks' : f}</button>)}</div></div>
-          <div className="market-grid">{filterMarkets.map(m => <button key={m.symbol} className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`} onClick={() => { setSelected(m.symbol); setPage('Trade') }}><div className="coin-row">
-  <MarketIcon symbol={m.symbol} />
+          <div className="market-search">
+  <input
+    type="text"
+    value={marketSearch}
+    onChange={e => setMarketSearch(e.target.value)}
+    placeholder="Search markets (BTC, ETH, Bitcoin...)"
+    className="market-search-input"
+   />
+</div>
 
-  <span className="coin-info">
-    <strong>{m.pair}</strong>
-    <small>{m.name}</small>
-  </span>
+<div className="market-count">
+  Showing {filterMarkets.length} markets
+</div>
 
-  <span className={`change ${m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}`}>
-    {m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}
-  </span>
-</div><div className="market-price">{quotePrice(m.price, m.symbol)}</div><div className="mini-spark"><svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline points={m.change >= 0 ? "0,25 12,20 24,23 38,9 52,15 65,7 78,13 91,4 105,8 120,2" : "0,4 12,8 24,3 38,13 52,9 65,20 78,14 91,23 105,18 120,27"} fill="none" stroke={m.change >= 0 ? '#45d3a1' : '#ff6b73'} strokeWidth="2" /></svg></div></button>)}</div>
+
+{/* CoinMarketCap-style Crypto Ranking Table */}
+{(marketFilter === 'All' || marketFilter === 'Crypto') && (
+  <div className="crypto-ranking-wrap">
+    <div className="crypto-ranking-title">
+      <h2>Cryptocurrency Rankings</h2>
+      <span>{cryptoRanking.length} Coins</span>
+    </div>
+
+    <div className="crypto-ranking-scroll">
+      <table className="crypto-ranking-table">
+        <thead>
+          <tr>
+  <th>#</th>
+  <th>Name</th>
+  <th>Price</th>
+  <th>24h Volume</th>
+  <th>1h</th>
+  <th>24h</th>
+  <th>7d</th>
+  <th>Last 7 Days</th>
+  <th>Market Cap</th>
+  <th>Circulating Supply</th>
+</tr>
+        </thead>
+
+        <tbody>
+          {cryptoRanking
+            .filter(coin => {
+              const search = marketSearch.toLowerCase().trim();
+              return (
+                !search ||
+                coin.name.toLowerCase().includes(search) ||
+                coin.symbol.toLowerCase().includes(search)
+              );
+            })
+            .map((coin, index) => {
+              const money = value =>
+                value == null
+                  ? '—'
+                  : '$' + Number(value).toLocaleString('en-US', {
+                      maximumFractionDigits: 2
+                    });
+
+              const percent = value =>
+                value == null
+                  ? '—'
+                  : `${value > 0 ? '+' : ''}${Number(value).toFixed(2)}%`;
+
+              const supply = coin.circulating_supply == null
+                ? '—'
+                : Number(coin.circulating_supply).toLocaleString('en-US', {
+                    maximumFractionDigits: 2
+                  }) + ' ' + coin.symbol.toUpperCase();
+
+              const prices = coin.sparkline_in_7d?.price || [];
+              const min = prices.length ? Math.min(...prices) : 0;
+              const max = prices.length ? Math.max(...prices) : 0;
+              const range = max - min || 1;
+
+              const points = prices.map((price, i) => {
+                const x = (i / Math.max(prices.length - 1, 1)) * 100;
+                const y = 30 - ((price - min) / range) * 27;
+                return `${x},${y}`;
+              }).join(' ');
+
+              const oneHour = coin.price_change_percentage_1h_in_currency;
+              const oneDay = coin.price_change_percentage_24h;
+              const sevenDay = coin.price_change_percentage_7d_in_currency;
+
+              return (
+                <tr
+                  key={coin.id}
+                  onClick={() => {
+                    setSelected(coin.symbol.toUpperCase());
+                    setPage('Trade');
+                  }}
+                  className="crypto-ranking-row"
+                >
+                  <td>{coin.market_cap_rank || index + 1}</td>
+
+                  <td>
+                    <div className="ranking-coin-name">
+                      <img src={coin.image} alt={coin.name} />
+                      <strong>{coin.name}</strong>
+                      <button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    setPage('Deposit');
+  }}
+  style={{
+    background: '#0ecb81',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '5px 9px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    marginLeft: '8px'
+  }}
+>
+  BUY
+</button>
+                      <span>{coin.symbol.toUpperCase()}</span>
+                    </div>
+                  </td>
+
+                  <td className="ranking-price">{money(coin.current_price)}</td>
+<td>{money(coin.total_volume)}</td>
+
+                  <td className={oneHour == null ? '' : oneHour >= 0 ? 'positive' : 'negative'}>
+                    {percent(oneHour)}
+                  </td>
+
+                  <td className={oneDay == null ? '' : oneDay >= 0 ? 'positive' : 'negative'}>
+                    {percent(oneDay)}
+                  </td>
+
+                  <td className={sevenDay == null ? '' : sevenDay >= 0 ? 'positive' : 'negative'}>
+                    {percent(sevenDay)}
+                  </td>
+
+                  <td>
+                    <svg className="ranking-sparkline" viewBox="0 0 100 32">
+                      {points && (
+                        <polyline
+                          points={points}
+                          fill="none"
+                          stroke={
+                            prices[prices.length - 1] >= prices[0]
+                              ? '#00c087'
+                              : '#f6465d'
+                          }
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      )}
+                    </svg>
+                  </td>
+                  <td>{money(coin.market_cap)}</td>
+<td>{supply}</td>
+                </tr>
+              );
+            })}
+        </tbody>
+      </table>
+
+      {cryptoRanking.length === 0 && (
+        <div className="ranking-loading">
+          Loading cryptocurrency rankings...
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+{/* Existing non-crypto market cards */}
+<div className="market-grid">
+  {filterMarkets
+    .filter(m => m.kind !== 'Crypto')
+    .map(m => (
+      <button
+        key={m.symbol}
+        className={`market-card ${selected === m.symbol ? 'market-selected' : ''}`}
+        onClick={() => {
+          setSelected(m.symbol);
+          setPage('Trade');
+        }}
+      >
+        <div className="coin-row">
+          <MarketIcon symbol={m.symbol} kind={m.kind} />
+
+          <span className="coin-info">
+            <strong>{m.pair}</strong>
+            <small>{m.name}</small>
+          </span>
+
+          <span className={`change ${m.change == null ? '' : m.change >= 0 ? 'positive' : 'negative'}`}>
+            {m.change == null ? '—' : `${m.change > 0 ? '+' : ''}${m.change.toFixed(2)}%`}
+          </span>
+        </div>
+
+        <div className="market-price">
+          {quotePrice(m.price, m.symbol)}
+        </div>
+
+        <div className="market-volume">
+          24h Vol: {m.volume != null
+            ? '$' + new Intl.NumberFormat('en-US', {
+                notation: 'compact',
+                maximumFractionDigits: 2
+              }).format(m.volume)
+            : '—'}
+        </div>
+
+        <div className="market-high-low">
+          <span>H: {m.high != null ? quotePrice(m.high, m.symbol) : '—'}</span>
+          <span>L: {m.low != null ? quotePrice(m.low, m.symbol) : '—'}</span>
+        </div>
+
+        <div className="mini-spark">
+          {(() => {
+            const prices = cryptoSparkline[m.pair] || [];
+            const values = prices.map(item => item.price);
+
+            if (values.length < 2) return null;
+
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const range = max - min || 1;
+
+            const points = values.map((price, index) => {
+              const x = (index / (values.length - 1)) * 120;
+              const y = 27 - ((price - min) / range) * 24;
+              return `${x},${y}`;
+            }).join(' ');
+
+            const isUp = values[values.length - 1] >= values[0];
+
+            return (
+              <svg viewBox="0 0 120 30" preserveAspectRatio="none">
+                <polyline
+                  points={points}
+                  fill="none"
+                  stroke={isUp ? '#00c087' : '#f6465d'}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            );
+          })()}
+        </div>
+      </button>
+    ))}
+</div>
+
           <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? 'Change since connection unavailable' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}</span></div></div><Candles
   Candles
   compact

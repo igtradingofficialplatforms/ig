@@ -13,6 +13,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "country-to-currency": "^3.0.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-icons": "^5.7.0",
