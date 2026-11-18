@@ -1623,8 +1623,61 @@ const filteredEarnPositions = earnPositions.filter(position => {
 });
   const [marketFilter, setMarketFilter] = useState('All')
   const [marketSearch, setMarketSearch] = useState('');
+  const [cryptoPage, setCryptoPage] = useState(1);
 const [cryptoMarkets, setCryptoMarkets] = useState([]);
 const [cryptoRanking, setCryptoRanking] = useState([]);
+const [globalCryptoData, setGlobalCryptoData] = useState(null);
+const [fearGreedData, setFearGreedData] = useState(null);
+const [globalCryptoLoading, setGlobalCryptoLoading] = useState(true);
+const [btcDerivativesData, setBtcDerivativesData] = useState(null);
+const [btcDerivativesLoading, setBtcDerivativesLoading] = useState(true);
+const [btcOpenInterestHistory, setBtcOpenInterestHistory] = useState([]);
+const [btcFundingHistory, setBtcFundingHistory] = useState([]);
+const [btcHistoryLoading, setBtcHistoryLoading] = useState(true);
+
+const [etfFlowData, setEtfFlowData] = useState({
+  btc: [],
+  eth: [],
+  updatedAt: null
+});
+const [etfFlowLoading, setEtfFlowLoading] = useState(true);
+const [btcLiquidations, setBtcLiquidations] = useState([]);
+const [liquidationStreamStatus, setLiquidationStreamStatus] = useState('Connecting');
+const [btcVolatilityData, setBtcVolatilityData] = useState(null);
+const [btcVolatilityLoading, setBtcVolatilityLoading] = useState(true);
+const [marketCapHistory, setMarketCapHistory] = useState([]);
+const [marketCapRange, setMarketCapRange] = useState('30');
+const [marketCapLoading, setMarketCapLoading] = useState(false);
+const [fearGreedHistory, setFearGreedHistory] = useState([]);
+const [altcoinSeasonData, setAltcoinSeasonData] = useState(null);
+const [altcoinSeasonHistory, setAltcoinSeasonHistory] = useState([]);
+const [altcoinSeasonLoading, setAltcoinSeasonLoading] = useState(true);
+const [fearGreedHover, setFearGreedHover] = useState(null);
+const [selectedFearGreed, setSelectedFearGreed] = useState(null);
+const [altcoinSeasonHover, setAltcoinSeasonHover] = useState(null);
+const [btcDailyHistory, setBtcDailyHistory] = useState([]);
+const filteredCryptoRanking = cryptoRanking.filter(coin => {
+  const search = marketSearch.toLowerCase().trim();
+
+  return (
+    !search ||
+    coin.name.toLowerCase().includes(search) ||
+    coin.symbol.toLowerCase().includes(search)
+  );
+});
+
+const cryptoPageSize = 10;
+const cryptoTotalPages = Math.max(
+  1,
+  Math.ceil(filteredCryptoRanking.length / cryptoPageSize)
+);
+
+const safeCryptoPage = Math.min(cryptoPage, cryptoTotalPages);
+
+const paginatedCryptoRanking = filteredCryptoRanking.slice(
+  (safeCryptoPage - 1) * cryptoPageSize,
+  safeCryptoPage * cryptoPageSize
+);
 const [cryptoSparkline, setCryptoSparkline] = useState({});
   const [selected, setSelected] = useState('BTC')
   const [selectedAsset, setSelectedAsset] = useState('BTC');
@@ -2495,6 +2548,523 @@ useEffect(() => {
   };
 }, []);
 
+// Load live global crypto market data and Fear & Greed Index
+useEffect(() => {
+  let stopped = false;
+  let timer;
+
+  const loadGlobalCryptoData = async () => {
+    try {
+      const [globalResponse, fearResponse] = await Promise.all([
+        fetch('https://api.coingecko.com/api/v3/global'),
+        fetch('https://api.alternative.me/fng/?limit=1')
+      ]);
+
+      if (!globalResponse.ok || !fearResponse.ok) {
+        throw new Error('Global crypto data API unavailable');
+      }
+
+      const globalResult = await globalResponse.json();
+      const fearResult = await fearResponse.json();
+
+      if (stopped) return;
+
+      setGlobalCryptoData(globalResult.data || null);
+      setFearGreedData(fearResult.data?.[0] || null);
+
+    } catch (error) {
+      console.error('Global crypto data loading failed:', error);
+    } finally {
+      if (!stopped) {
+        setGlobalCryptoLoading(false);
+        timer = setTimeout(loadGlobalCryptoData, 300000);
+      }
+    }
+  };
+
+  loadGlobalCryptoData();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, []);
+// Load live BTC Futures Open Interest and Funding Rate
+useEffect(() => {
+  let stopped = false;
+  let timer;
+
+  const loadBtcDerivatives = async () => {
+    try {
+      const [oiResponse, fundingResponse] = await Promise.all([
+        fetch('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT'),
+        fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT')
+      ]);
+
+      if (!oiResponse.ok || !fundingResponse.ok) {
+        throw new Error('BTC Futures API unavailable');
+      }
+
+      const [oi, funding] = await Promise.all([
+        oiResponse.json(),
+        fundingResponse.json()
+      ]);
+
+      if (stopped) return;
+
+      const openInterestBTC = Number(oi.openInterest);
+      const markPrice = Number(funding.markPrice);
+      const fundingRate = Number(funding.lastFundingRate);
+
+      setBtcDerivativesData({
+        openInterestBTC,
+        openInterestUSD: openInterestBTC * markPrice,
+        markPrice,
+        fundingRate,
+        nextFundingTime: Number(funding.nextFundingTime),
+        updatedAt: Date.now()
+      });
+
+    } catch (error) {
+      console.error('BTC derivatives data failed:', error);
+    } finally {
+      if (!stopped) {
+        setBtcDerivativesLoading(false);
+        timer = setTimeout(loadBtcDerivatives, 30000);
+      }
+    }
+  };
+
+  loadBtcDerivatives();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, []);
+
+// Load BTC Futures historical Open Interest and Funding Rate
+useEffect(() => {
+  let stopped = false;
+
+  const loadBtcHistory = async () => {
+    try {
+      const [oiResponse, fundingResponse] = await Promise.all([
+        fetch(
+          'https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=30'
+        ),
+        fetch(
+          'https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=30'
+        )
+      ]);
+
+      if (!oiResponse.ok || !fundingResponse.ok) {
+        throw new Error('Historical futures API unavailable');
+      }
+
+      const [oiData, fundingData] = await Promise.all([
+        oiResponse.json(),
+        fundingResponse.json()
+      ]);
+
+      if (stopped) return;
+
+      setBtcOpenInterestHistory(
+        Array.isArray(oiData) ? oiData : []
+      );
+
+      setBtcFundingHistory(
+        Array.isArray(fundingData) ? fundingData : []
+      );
+    } catch (error) {
+      console.error('BTC futures history failed:', error);
+    } finally {
+      if (!stopped) {
+        setBtcHistoryLoading(false);
+      }
+    }
+  };
+
+  loadBtcHistory();
+
+  return () => {
+    stopped = true;
+  };
+}, []);
+
+// Load BTC and ETH Spot ETF Net Flow data
+useEffect(() => {
+  let stopped = false;
+
+  const loadETFData = async () => {
+    try {
+      const [btcResponse, ethResponse] = await Promise.all([
+        fetch('https://xoomar.com/api/markets/etf-flows?asset=btc&days=30'),
+        fetch('https://xoomar.com/api/markets/etf-flows?asset=eth&days=30')
+      ]);
+
+      if (!btcResponse.ok || !ethResponse.ok) {
+        throw new Error('ETF flow API unavailable');
+      }
+
+      const [btcJson, ethJson] = await Promise.all([
+        btcResponse.json(),
+        ethResponse.json()
+      ]);
+
+      const makeDailyTotals = (rows) => {
+        const totals = {};
+
+        (Array.isArray(rows) ? rows : []).forEach(row => {
+          if (row.flowUsd == null || !row.date) return;
+
+          const value = Number(row.flowUsd);
+          if (!Number.isFinite(value)) return;
+
+          totals[row.date] = (totals[row.date] || 0) + value;
+        });
+
+        return Object.entries(totals)
+          .map(([date, flowUsd]) => ({ date, flowUsd }))
+          .sort((a, b) => b.date.localeCompare(a.date));
+      };
+
+      if (stopped) return;
+
+      setEtfFlowData({
+        btc: makeDailyTotals(btcJson.data),
+        eth: makeDailyTotals(ethJson.data),
+        updatedAt: btcJson.updatedAt || ethJson.updatedAt || null
+      });
+
+    } catch (error) {
+      console.error('ETF flow data failed:', error);
+    } finally {
+      if (!stopped) {
+        setEtfFlowLoading(false);
+      }
+    }
+  };
+
+  loadETFData();
+
+  return () => {
+    stopped = true;
+  };
+}, []);
+
+
+// Live BTC liquidation stream - All Market
+useEffect(() => {
+  let socket;
+  let stopped = false;
+  let reconnectTimer;
+
+  const connectLiquidationStream = () => {
+    if (stopped) return;
+
+    socket = new WebSocket(
+      'wss://fstream.binance.com/ws/!forceOrder@arr'
+    );
+
+    socket.onopen = () => {
+      if (!stopped) {
+        setLiquidationStreamStatus('Connected');
+      }
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        // Binance all-market stream returns an array
+        const events = Array.isArray(message)
+          ? message
+          : [message];
+
+        const btcEvents = events.filter(
+          item => item.o?.s === 'BTCUSDT'
+        );
+
+        if (btcEvents.length === 0) return;
+
+        const newLiquidations = btcEvents
+          .map(item => {
+            const order = item.o;
+
+            const price = Number(order.ap || order.p || 0);
+            const quantity = Number(order.z || order.q || 0);
+
+            if (!price || !quantity) return null;
+
+            return {
+              id: `${order.s}-${order.T}-${order.S}`,
+              side: order.S,
+              price,
+              quantity,
+              value: price * quantity,
+              time: Number(order.T || Date.now())
+            };
+          })
+          .filter(Boolean);
+
+        if (newLiquidations.length > 0) {
+          setBtcLiquidations(previous => [
+            ...newLiquidations,
+            ...previous
+          ].slice(0, 20));
+        }
+
+      } catch (error) {
+        console.error('Liquidation message error:', error);
+      }
+    };
+
+    socket.onerror = () => {
+      if (!stopped) {
+        setLiquidationStreamStatus('Unavailable');
+      }
+    };
+
+    socket.onclose = () => {
+      if (!stopped) {
+        setLiquidationStreamStatus('Reconnecting');
+
+        reconnectTimer = setTimeout(
+          connectLiquidationStream,
+          5000
+        );
+      }
+    };
+  };
+
+  connectLiquidationStream();
+
+  return () => {
+    stopped = true;
+    clearTimeout(reconnectTimer);
+
+    if (socket) {
+      socket.close();
+    }
+  };
+}, []);
+
+
+// Calculate BTC 24-hour realized volatility
+useEffect(() => {
+  let stopped = false;
+  let timer;
+
+  const loadBtcVolatility = async () => {
+    try {
+      const response = await fetch(
+        'https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1h&limit=25'
+      );
+
+      if (!response.ok) {
+        throw new Error('BTC volatility API unavailable');
+      }
+
+      const candles = await response.json();
+
+      if (!Array.isArray(candles) || candles.length < 25) {
+        throw new Error('Not enough hourly BTC candles');
+      }
+
+      const closes = candles.map(candle => Number(candle[4]));
+      const returns = [];
+
+      for (let i = 1; i < closes.length; i++) {
+        if (closes[i - 1] > 0 && closes[i] > 0) {
+          returns.push(Math.log(closes[i] / closes[i - 1]));
+        }
+      }
+
+      const average = returns.reduce((sum, value) => sum + value, 0)
+        / returns.length;
+
+      const variance = returns.reduce(
+        (sum, value) => sum + Math.pow(value - average, 2),
+        0
+      ) / returns.length;
+
+      const volatility = Math.sqrt(variance) * Math.sqrt(24) * 100;
+
+      const firstOpen = Number(candles[0][1]);
+      const lastClose = closes[closes.length - 1];
+
+      if (stopped) return;
+
+      setBtcVolatilityData({
+        volatility,
+        priceChange: ((lastClose / firstOpen) - 1) * 100,
+        lastPrice: lastClose,
+        updatedAt: Date.now()
+      });
+
+    } catch (error) {
+      console.error('BTC volatility failed:', error);
+    } finally {
+      if (!stopped) {
+        setBtcVolatilityLoading(false);
+        timer = setTimeout(loadBtcVolatility, 300000);
+      }
+    }
+  };
+
+  loadBtcVolatility();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, []);
+
+// Load free historical Crypto Fear & Greed data
+useEffect(() => {
+  let active = true;
+
+  const loadFearGreedHistory = async () => {
+    try {
+      const response = await fetch(
+        'https://api.alternative.me/fng/?limit=365'
+      );
+
+      if (!response.ok) {
+        throw new Error('Fear & Greed API unavailable');
+      }
+
+      const result = await response.json();
+
+      if (!active) return;
+
+      const history = (result.data || [])
+        .map(item => ({
+          value: Number(item.value),
+          classification: item.value_classification,
+          timestamp: Number(item.timestamp) * 1000
+        }))
+        .filter(item =>
+          Number.isFinite(item.value) &&
+          Number.isFinite(item.timestamp)
+        )
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      setFearGreedHistory(history);
+
+    } catch (error) {
+      console.error('Fear & Greed history failed:', error);
+    }
+  };
+
+  loadFearGreedHistory();
+
+  return () => {
+    active = false;
+  };
+}, []);
+// Load live Altcoin Season Index and historical data
+useEffect(() => {
+  let stopped = false;
+  let timer;
+
+  const loadAltcoinSeason = async () => {
+    try {
+      const [latestResponse, historyResponse] = await Promise.all([
+        fetch(
+          'https://pro-api.coinmarketcap.com/public-api/v1/altcoin-season-index/latest'
+        ),
+        fetch(
+          'https://pro-api.coinmarketcap.com/public-api/v1/altcoin-season-index/historical?timeframe=90d'
+        )
+      ]);
+
+      if (!latestResponse.ok || !historyResponse.ok) {
+        throw new Error('Altcoin Season API unavailable');
+      }
+
+      const latestResult = await latestResponse.json();
+      const historyResult = await historyResponse.json();
+
+      if (stopped) return;
+
+      setAltcoinSeasonData(latestResult.data || null);
+
+      const history = (historyResult.data?.points || [])
+        .map(item => ({
+          value: Number(item.altcoin_index),
+          timestamp: new Date(item.timestamp).getTime()
+        }))
+        .filter(item =>
+          Number.isFinite(item.value) &&
+          Number.isFinite(item.timestamp)
+        );
+
+      setAltcoinSeasonHistory(history);
+
+    } catch (error) {
+      console.error('Altcoin Season loading failed:', error);
+    } finally {
+      if (!stopped) {
+        setAltcoinSeasonLoading(false);
+        timer = setTimeout(loadAltcoinSeason, 900000);
+      }
+    }
+  };
+
+  loadAltcoinSeason();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, []);
+// Load real BTC daily historical price and volume
+useEffect(() => {
+  let stopped = false;
+  let timer;
+
+  const loadBtcDailyHistory = async () => {
+    try {
+      const response = await fetch(
+        'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=365'
+      );
+
+      if (!response.ok) {
+        throw new Error('BTC historical API unavailable');
+      }
+
+      const result = await response.json();
+
+      if (stopped) return;
+
+      const history = result.map(item => ({
+  timestamp: Number(item[0]),
+  open: Number(item[1]),
+  price: Number(item[4]),
+  volume: Number(item[5]),
+  quoteVolume: Number(item[7])
+}));
+
+      setBtcDailyHistory(history);
+
+    } catch (error) {
+      console.error('BTC history loading failed:', error);
+    } finally {
+      if (!stopped) {
+        timer = setTimeout(loadBtcDailyHistory, 300000);
+      }
+    }
+  };
+
+  loadBtcDailyHistory();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}, []);
 // Detect visitor country and fetch live Forex rate
 useEffect(() => {
   let stopped = false;
@@ -3409,14 +3979,18 @@ useEffect(() => {
 
         const data = await response.json()
 
-        candles = data.map(k => ({
-          time: Number(k[0]),
-          open: Number(k[1]),
-          high: Number(k[2]),
-          low: Number(k[3]),
-          close: Number(k[4]),
-          up: Number(k[4]) >= Number(k[1])
-        }))
+        
+candles = data.map(k => ({
+  time: Number(k[0]),
+  open: Number(k[1]),
+  high: Number(k[2]),
+  low: Number(k[3]),
+  close: Number(k[4]),
+  volume: Number(k[5]),
+  quoteVolume: Number(k[7]),
+  up: Number(k[4]) >= Number(k[1])
+}));
+
       } else {
         // Other markets use your existing /api/market backend.
         const providerSymbols = {
@@ -3626,15 +4200,19 @@ useEffect(() => {
       candleLow = Math.min(candleLow, price);
     }
 
-    const candle = {
-      time: candleTime,
-      open: candleOpen,
-      high: candleHigh,
-      low: candleLow,
-      close: price,
-      up: price >= candleOpen,
-      simulated: true
-    };
+   
+const candle = {
+  time: Number(k.t),
+  open: Number(k.o),
+  high: Number(k.h),
+  low: Number(k.l),
+  close: Number(k.c),
+  volume: Number(k.v),
+  quoteVolume: Number(k.q),
+  trades: Number(k.n),
+  up: Number(k.c) >= Number(k.o)
+};
+
 
     setLivePrices(prev => ({
       ...prev,
@@ -4540,7 +5118,7 @@ if (!authSession && !isAdminRoute) {
   {[
     { name: 'Home' },
     { name: 'Trade' },
-    { name: 'Deposit' },
+    { name: 'Dashboard' },
     { name: 'Assets' },
     { name: 'Earn' }
   ].map((item) => (
@@ -4560,7 +5138,7 @@ if (!authSession && !isAdminRoute) {
             <path d="M7 7h13l-3-3M17 17H4l3 3M20 7l-3-3M4 17l3 3" />
           </svg>
         )}
-        {item.name === 'Deposit' && (
+        {item.name === 'Dashboard' &&(
           <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M12 3v13m-5-5 5 5 5-5M4 20h16" />
           </svg>
@@ -4656,7 +5234,10 @@ if (!authSession && !isAdminRoute) {
   <input
     type="text"
     value={marketSearch}
-    onChange={e => setMarketSearch(e.target.value)}
+    onChange={e => {
+  setMarketSearch(e.target.value);
+  setCryptoPage(1);
+}}
     placeholder="Search markets (BTC, ETH, Bitcoin...)"
     className="market-search-input"
    />
@@ -4693,16 +5274,7 @@ if (!authSession && !isAdminRoute) {
         </thead>
 
         <tbody>
-          {cryptoRanking
-            .filter(coin => {
-              const search = marketSearch.toLowerCase().trim();
-              return (
-                !search ||
-                coin.name.toLowerCase().includes(search) ||
-                coin.symbol.toLowerCase().includes(search)
-              );
-            })
-            .map((coin, index) => {
+          {paginatedCryptoRanking.map((coin, index) => {
               const money = value =>
                 value == null
                   ? '—'
@@ -4745,7 +5317,7 @@ if (!authSession && !isAdminRoute) {
                   }}
                   className="crypto-ranking-row"
                 >
-                  <td>{coin.market_cap_rank || index + 1}</td>
+                 <td>{coin.market_cap_rank || ((safeCryptoPage - 1) * cryptoPageSize + index + 1)}</td>
 
                   <td>
                     <div className="ranking-coin-name">
@@ -4821,6 +5393,52 @@ if (!authSession && !isAdminRoute) {
         </div>
       )}
     </div>
+   <div className="crypto-pagination">
+  <button
+    type="button"
+    disabled={safeCryptoPage === 1}
+    onClick={() => setCryptoPage(safeCryptoPage - 1)}
+  >
+    Previous
+  </button>
+
+  {Array.from({ length: cryptoTotalPages }, (_, i) => i + 1)
+    .filter(pageNumber =>
+      pageNumber === 1 ||
+      pageNumber === cryptoTotalPages ||
+      Math.abs(pageNumber - safeCryptoPage) <= 3
+    )
+    .map((pageNumber, index, pages) => (
+      <React.Fragment key={pageNumber}>
+        {index > 0 && pageNumber - pages[index - 1] > 1 && (
+          <span style={{ padding: '7px 4px' }}>...</span>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setCryptoPage(pageNumber)}
+          style={{
+            background: safeCryptoPage === pageNumber ? '#0ecb81' : '#222',
+            color: '#fff',
+            border: '1px solid #444',
+            padding: '7px 11px',
+            borderRadius: '5px',
+            cursor: 'pointer'
+          }}
+        >
+          {pageNumber}
+        </button>
+      </React.Fragment>
+    ))}
+
+  <button
+    type="button"
+    disabled={safeCryptoPage === cryptoTotalPages}
+    onClick={() => setCryptoPage(safeCryptoPage + 1)}
+  >
+    Next
+  </button>
+</div>
   </div>
 )}
 
@@ -4912,7 +5530,99 @@ if (!authSession && !isAdminRoute) {
   currentPrice={asset.price}
   timeframe={chartTimeframe}
   onTimeframeChange={setChartTimeframe}
-/></div><div className="panel quick-panel"><span className="eyebrow">QUICK ACTION</span><h2>Ready to trade?</h2><p className="muted">Start a trade with account funds.</p><button className="btn btn-gold btn-full" onClick={() => setPage('Trade')}>Open trading terminal <span>↗</span></button><button className="btn btn-outline btn-full" onClick={() => setPage('Deposit')}>Deposit request <span>＋</span></button><div className="secure-note"><span>✦</span> Account balance.</div></div></div>
+/>
+
+<div style={{
+  marginTop: '18px',
+  padding: '14px',
+  borderRadius: '10px',
+  background: '#171b22'
+}}>
+  {(() => {
+    const volumeCandles = (
+      liveCandles[asset.symbol] || []
+    ).slice(-60);
+
+    const maxVolume = Math.max(
+      ...volumeCandles.map(c => Number(c.volume || 0)),
+      1
+    );
+
+    const hasVolume = volumeCandles.some(
+      c => Number(c.volume) > 0
+    );
+
+    return (
+      <>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '12px'
+        }}>
+          <strong>Trading Volume ({asset.symbol})</strong>
+          <small className="muted">Live · {chartTimeframe}</small>
+        </div>
+
+        {hasVolume ? (
+          <div style={{
+            height: '105px',
+            display: 'flex',
+            alignItems: 'end',
+            gap: '3px',
+            overflow: 'hidden'
+          }}>
+            {volumeCandles.map((candle, index) => {
+              const volume = Number(candle.volume || 0);
+              const height = Math.max(
+                2,
+                (volume / maxVolume) * 100
+              );
+
+              return (
+                <div
+                  key={`${candle.time}-${index}`}
+                  title={`${new Date(candle.time).toLocaleString()} | Volume: ${volume.toLocaleString('en-US')}`}
+                  style={{
+                    flex: 1,
+                    minWidth: '2px',
+                    height: `${height}%`,
+                    background: candle.up ? '#00c087' : '#f6465d',
+                    borderRadius: '3px 3px 0 0'
+                  }}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <p className="muted">
+            Waiting for real volume data...
+          </p>
+        )}
+
+        {hasVolume && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: '10px'
+          }}>
+            <small className="muted">
+              {volumeCandles.length} candles
+            </small>
+            <small className="muted">
+              Latest volume: {Number(
+                volumeCandles[volumeCandles.length - 1]?.volume || 0
+              ).toLocaleString('en-US', {
+                maximumFractionDigits: 3
+              })}
+            </small>
+          </div>
+        )}
+      </>
+    );
+  })()}
+</div>
+ </div><div className="panel quick-panel"><span className="eyebrow">QUICK ACTION</span><h2>Ready to trade?</h2><p className="muted">Start a trade with account funds.</p><button className="btn btn-gold btn-full" onClick={() => setPage('Trade')}>Open trading terminal <span>↗</span></button><button className="btn btn-outline btn-full" onClick={() => setPage('Deposit')}>Deposit request <span>＋</span></button><div className="secure-note"><span>✦</span> Account balance.</div></div></div>
           <CustomerService telegramUrl={telegramUrl} />
         </section>}
         {page === 'Trade' && <section className={`page-section ${tradeFullscreen ? 'trade-fullscreen' : ''}`}>
@@ -5094,7 +5804,1170 @@ onTimeframeChange={setChartTimeframe}
             </p>
           </div>
         </section>}
+         
+{page === 'Dashboard' && (
+  <section className="page-section">
+    <div className="eyebrow">IG Trade CRYPTOCURRENCY MARKET</div>
+    <h1>Crypto <span className="gold-text">Charts</span></h1>
+    <p className="muted">
+      IG cryptocurrency market,including Bitcoin dominance, altcoin season, ETF net flows, and real-time market sentiment, all conveniently accessible in one place on IG Trade Platforms
+    </p>
 
+    
+<div className="market-grid">
+
+  {/* Total Crypto Market Cap */}
+  <div className="panel">
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '10px'
+    }}>
+      <span className="muted">Total Crypto Market Cap</span>
+      <span style={{
+        width: '42px',
+        height: '42px',
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(212,175,55,0.14)',
+        color: '#D4AF37',
+        fontSize: '23px'
+      }}>◈</span>
+    </div>
+
+    <h2 style={{ margin: '12px 0' }}>
+      {globalCryptoData
+        ? '$' + (Number(globalCryptoData.total_market_cap?.usd) / 1e12).toFixed(3) + 'T'
+        : 'Loading...'}
+    </h2>
+
+    {globalCryptoData && (() => {
+      const change = Number(
+        globalCryptoData.market_cap_change_percentage_24h_usd || 0
+      );
+
+      return (
+        <span style={{
+          color: change >= 0 ? '#00c087' : '#f6465d',
+          fontWeight: 700,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '5px'
+        }}>
+          {change >= 0 ? '▲' : '▼'}
+          {Math.abs(change).toFixed(2)}% (24h)
+        </span>
+      );
+    })()}
+  </div>
+
+  {/* BTC Dominance */}
+  <div className="panel">
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '10px'
+    }}>
+      <span className="muted">BTC Dominance</span>
+      <img
+        src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/btc.png"
+        alt="Bitcoin"
+        width="40"
+        height="40"
+        style={{ borderRadius: '50%' }}
+      />
+    </div>
+
+    <h2 style={{ color: '#f7931a', margin: '12px 0' }}>
+      {globalCryptoData
+        ? Number(globalCryptoData.market_cap_percentage?.btc).toFixed(2) + '%'
+        : 'Loading...'}
+    </h2>
+
+    <small style={{ color: '#f7931a', fontWeight: 600 }}>
+      Bitcoin Market Share
+    </small>
+  </div>
+
+  {/* ETH Dominance */}
+  <div className="panel">
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '10px'
+    }}>
+      <span className="muted">ETH Dominance</span>
+      <img
+        src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/eth.png"
+        alt="Ethereum"
+        width="40"
+        height="40"
+        style={{ borderRadius: '50%' }}
+      />
+    </div>
+
+    <h2 style={{ color: '#627eea', margin: '12px 0' }}>
+      {globalCryptoData
+        ? Number(globalCryptoData.market_cap_percentage?.eth).toFixed(2) + '%'
+        : 'Loading...'}
+    </h2>
+
+    <small style={{ color: '#627eea', fontWeight: 600 }}>
+      Ethereum Market Share
+    </small>
+  </div>
+
+  {/* Active Cryptocurrencies */}
+  <div className="panel">
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '10px'
+    }}>
+      <span className="muted">Active Cryptocurrencies</span>
+      <span style={{
+        width: '42px',
+        height: '42px',
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,192,135,0.13)',
+        color: '#00c087',
+        fontSize: '23px'
+      }}>◉</span>
+    </div>
+
+    <h2 style={{ color: '#00c087', margin: '12px 0' }}>
+      {globalCryptoData
+        ? Number(globalCryptoData.active_cryptocurrencies).toLocaleString()
+        : 'Loading...'}
+    </h2>
+
+    <small style={{ color: '#00c087', fontWeight: 600 }}>
+      Tracked Digital Assets
+    </small>
+  </div>
+
+</div>
+
+
+    <div className="panel">
+     <div style={{
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  marginBottom: '16px'
+}}>
+  <span style={{
+    width: '44px',
+    height: '44px',
+    borderRadius: '50%',
+    background: 'rgba(212,175,55,0.15)',
+    color: '#D4AF37',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '25px'
+  }}>◉</span>
+  <div>
+    <h2 style={{ margin: 0 }}>Fear & Greed Index</h2>
+    <small className="muted">Crypto Market Sentiment</small>
+  </div>
+</div>
+      {fearGreedData ? (
+        <>
+          <h1>{fearGreedData.value} / 100</h1>
+          <p>{fearGreedData.value_classification}</p>
+         <div className="fear-greed-history">
+  {fearGreedHistory.length > 1 ? (() => {
+    const latest = fearGreedHistory[fearGreedHistory.length - 1];
+    const previous = fearGreedHistory[fearGreedHistory.length - 2];
+    const change = latest.value - previous.value;
+
+    const chartData = fearGreedHistory.map((item, index) => {
+  const btc = btcDailyHistory.find(coin =>
+    new Date(coin.timestamp).toDateString() ===
+    new Date(item.timestamp).toDateString()
+  );
+
+  return {
+    ...item,
+    btcPrice: btc?.price ?? null,
+    btcOpen: btc?.open ?? null,
+    btcVolume: btc?.volume ?? null,
+    x: 40 + (index / (fearGreedHistory.length - 1)) * 660,
+    y: 170 - (item.value / 100) * 140
+  };
+});
+
+const points = chartData
+  .map(item => `${item.x},${item.y}`)
+  .join(' ');
+
+const latestY = 170 - (latest.value / 100) * 140;
+
+const [selectedFearGreed, setSelectedFearGreed] = [null, () => {}];
+
+    return (
+      <>
+        <div className="history-chart-header">
+          <div>
+            <span className="muted">Current Fear & Greed</span>
+            <h2>{latest.value} / 100</h2>
+            <strong>{latest.classification}</strong>
+          </div>
+
+          <div style={{
+            textAlign: 'right',
+            color: change >= 0 ? '#70c99a' : '#ef7777'
+          }}>
+            <strong>
+              {change >= 0 ? '+' : ''}{change} points
+            </strong>
+            <p className="muted">Change from previous reading</p>
+          </div>
+        </div>
+
+        <div className="history-chart-header">
+          <strong>IG Historical Index</strong>
+          <span>{fearGreedHistory.length} readings</span>
+        </div>
+
+        <svg
+          viewBox="0 0 760 260"
+          width="100%"
+          role="img"
+          aria-label="Fear and Greed historical index chart"
+         onPointerMove={event => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const x = (event.clientX - rect.left) * (760 / rect.width);
+
+  const index = Math.round(
+    ((x - 40) / 660) * (chartData.length - 1)
+  );
+
+  const safeIndex = Math.max(
+    0,
+    Math.min(chartData.length - 1, index)
+  );
+
+  setSelectedFearGreed(chartData[safeIndex]);
+  console.log('Fear Greed Hover:', chartData[safeIndex]);
+}}
+
+onPointerDown={event => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const x = (event.clientX - rect.left) * (760 / rect.width);
+  const index = Math.round(
+    ((x - 40) / 660) * (chartData.length - 1)
+  );
+
+  const safeIndex = Math.max(
+    0,
+    Math.min(chartData.length - 1, index)
+  );
+
+  setSelectedFearGreed(chartData[safeIndex]);
+  console.log('Fear Greed Hover:', chartData[safeIndex]);
+}}
+style={{ touchAction: 'pan-y', cursor: 'crosshair' }}
+        >
+          {[30, 65, 100, 135, 170].map((y, i) => (
+            <g key={y}>
+              <line
+                x1="40"
+                y1={y}
+                x2="700"
+                y2={y}
+                stroke="#777"
+                opacity=".25"
+                strokeDasharray="4 5"
+              />
+              <text
+                x="5"
+                y={y + 4}
+                fill="#aaa08a"
+                fontSize="11"
+              >
+                {100 - i * 25}
+              </text>
+            </g>
+          ))}
+          {(() => {
+  const maxVolume = Math.max(
+    ...chartData.map(item => item.btcVolume || 0),
+    1
+  );
+
+  return chartData.map((item, index) => {
+    if (item.btcVolume == null) return null;
+
+    const barHeight = (item.btcVolume / maxVolume) * 38;
+
+    return (
+      <rect
+        key={item.timestamp}
+        x={item.x - 1}
+        y={215 - barHeight}
+        width="2"
+        height={barHeight}
+        fill={
+          item.btcPrice >= item.btcOpen
+            ? '#00c087'
+            : '#f6465d'
+        }
+        opacity=".8"
+      />
+    );
+  });
+})()}
+<polyline
+  className="fear-greed-line"
+  fill="none"
+  stroke="#D4AF37"
+  strokeWidth="3"
+  strokeLinejoin="round"
+  strokeLinecap="round"
+  strokeDasharray="2000"
+  strokeDashoffset="2000"
+  points={points}
+>
+  <animate
+    attributeName="stroke-dashoffset"
+    from="2000"
+    to="0"
+    dur="2.5s"
+    fill="freeze"
+  />
+</polyline>
+
+<circle
+  cx="700"
+  cy={latestY}
+  r="5"
+  fill="#D4AF37"
+>
+  <animate
+    attributeName="r"
+    values="5;8;5"
+    dur="1.8s"
+    repeatCount="indefinite"
+  />
+  <animate
+    attributeName="opacity"
+    values="1;0.55;1"
+    dur="1.8s"
+    repeatCount="indefinite"
+  />
+</circle>
+         <text x="40" y="250" fill="#aaa08a" fontSize="11">
+            {new Date(fearGreedHistory[0].timestamp).toLocaleDateString()}
+          </text>
+
+          <text
+            x="700"
+            y="250"
+            textAnchor="end"
+            fill="#aaa08a"
+            fontSize="11"
+          >
+            {new Date(latest.timestamp).toLocaleDateString()}
+          </text>
+        </svg>
+      
+        {selectedFearGreed && (
+  <div
+  className="fear-greed-tooltip"
+  style={{
+    display: 'block',
+    position: 'relative',
+    zIndex: 20,
+    background: '#20242c',
+    color: '#ffffff',
+    border: '1px solid #D4AF37',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    marginTop: '10px',
+    minHeight: '100px'
+  }}
+>
+    <strong>
+      {new Date(selectedFearGreed.timestamp).toLocaleDateString()}
+    </strong>
+    <p>Fear & Greed: {selectedFearGreed.value}</p>
+    <p>
+      BTC Price: {selectedFearGreed.btcPrice == null
+        ? 'Unavailable'
+        : '$' + selectedFearGreed.btcPrice.toLocaleString()}
+    </p>
+    <p>
+      BTC Volume: {selectedFearGreed.btcVolume == null
+        ? 'Unavailable'
+        : selectedFearGreed.btcVolume.toFixed(2) + ' BTC'}
+    </p>
+  </div>
+)}
+        <p className="muted">
+          Latest reading: {new Date(latest.timestamp).toLocaleString()}
+        </p>
+      </>
+    );
+  })() : (
+    <p className="muted">Historical chart data unavailable.</p>
+  )}
+</div>
+        </>
+      ) : (
+        <p className="muted">Loading Fear & Greed Index...</p>
+      )}
+    </div>
+    <div className="panel">
+ <div style={{
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  marginBottom: '16px'
+}}>
+  <span style={{
+    width: '44px',
+    height: '44px',
+    borderRadius: '50%',
+    background: 'rgba(0,192,135,0.14)',
+    color: '#00c087',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '25px'
+  }}>✦</span>
+  <div>
+    <h2 style={{ margin: 0 }}>Altcoin Season Index</h2>
+    <small className="muted">Altcoin Market Performance</small>
+  </div>
+</div>
+
+  {altcoinSeasonLoading ? (
+    <p className="muted">Loading Altcoin Season Index...</p>
+  ) : altcoinSeasonData ? (
+    <>
+      <h1>{altcoinSeasonData.altcoin_index} / 100</h1>
+
+      <strong>
+        {altcoinSeasonData.altcoin_index > 75
+          ? 'Altcoin Season'
+          : altcoinSeasonData.altcoin_index < 25
+            ? 'Bitcoin Season'
+            : 'Neutral Market'}
+      </strong>
+
+      <p className="muted">
+        Updated: {new Date(
+          altcoinSeasonData.snapshot_time
+        ).toLocaleString()}
+      </p>
+
+      <div className="altcoin-season-history">
+        {altcoinSeasonHistory.length > 1 ? (() => {
+          const points = altcoinSeasonHistory.map((item, index) => {
+            const x = 40 + (index / (altcoinSeasonHistory.length - 1)) * 660;
+            const y = 170 - (item.value / 100) * 140;
+            return `${x},${y}`;
+          }).join(' ');
+
+          return (
+            <svg
+              viewBox="0 0 760 260"
+              width="100%"
+              role="img"
+              aria-label="90 day Altcoin Season historical chart"
+            >
+              {[30, 65, 100, 135, 170].map((y, i) => (
+                <g key={y}>
+                  <line
+                    x1="40"
+                    y1={y}
+                    x2="700"
+                    y2={y}
+                    stroke="#777"
+                    opacity=".25"
+                    strokeDasharray="4 5"
+                  />
+                  <text
+                    x="5"
+                    y={y + 4}
+                    fill="#aaa08a"
+                    fontSize="11"
+                  >
+                    {100 - i * 25}
+                  </text>
+                </g>
+              ))}
+
+              <polyline
+                fill="none"
+                stroke="#D4AF37"
+                strokeWidth="3"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                points={points}
+              />
+            </svg>
+          );
+        })() : (
+          <p className="muted">Historical data unavailable.</p>
+        )}
+      </div>
+
+      <p className="muted">
+        90 Day Historical Index · CoinMarketCap
+      </p>
+    </>
+  ) : (
+    <p className="muted">Market data is being updated. Please check back shortly.</p>
+  )}
+</div>
+<div className="panel">
+
+<div className="panel">
+ <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+  <span style={{
+    width: '42px', height: '42px', borderRadius: '50%',
+    background: 'rgba(212,175,55,0.14)', color: '#D4AF37',
+    display: 'flex', alignItems: 'center',
+    justifyContent: 'center', fontSize: '24px'
+  }}>◈</span>
+  <div>
+    <h2 style={{ margin: 0 }}>Market Cap Breakdown</h2>
+  </div>
+</div>
+
+  {globalCryptoData?.total_market_cap?.usd != null &&
+   globalCryptoData?.total_volume?.usd != null &&
+   globalCryptoData?.market_cap_percentage ? (
+    <>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '18px',
+        marginTop: '16px'
+      }}>
+        <div>
+          <small>Total Crypto Market Cap</small>
+          <h2>
+            ${Number(globalCryptoData.total_market_cap.usd).toLocaleString(
+              'en-US',
+              { maximumFractionDigits: 0 }
+            )}
+          </h2>
+        </div>
+
+        <div>
+          <small>24h Trading Volume</small>
+          <h2>
+            ${Number(globalCryptoData.total_volume.usd).toLocaleString(
+              'en-US',
+              { maximumFractionDigits: 0 }
+            )}
+          </h2>
+        </div>
+      </div>
+
+      {(() => {
+        const btc = Number(globalCryptoData.market_cap_percentage.btc || 0);
+        const eth = Number(globalCryptoData.market_cap_percentage.eth || 0);
+        const others = Math.max(0, 100 - btc - eth);
+
+        return (
+          <>
+            <h3 style={{ marginTop: '22px' }}>Market Share</h3>
+
+            <div style={{
+              display: 'flex',
+              width: '100%',
+              height: '14px',
+              overflow: 'hidden',
+              borderRadius: '8px',
+              background: '#292929',
+              marginTop: '12px'
+            }}>
+              <div style={{ width: `${btc}%`, background: '#f7931a' }} />
+              <div style={{ width: `${eth}%`, background: '#627eea' }} />
+              <div style={{ width: `${others}%`, background: '#00c087' }} />
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: '10px',
+              marginTop: '16px'
+            }}>
+              <div>
+                <small style={{ color: '#f7931a' }}>Bitcoin</small>
+                <h3>{btc.toFixed(2)}%</h3>
+              </div>
+
+              <div>
+                <small style={{ color: '#627eea' }}>Ethereum</small>
+                <h3>{eth.toFixed(2)}%</h3>
+              </div>
+
+              <div>
+                <small style={{ color: '#00c087' }}>Others</small>
+                <h3>{others.toFixed(2)}%</h3>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      <p className="muted">
+        Live IG Trade cryptocurrency market data
+      </p>
+    </>
+  ) : (
+    <p className="muted">Loading IG market data...</p>
+  )}
+</div>
+ <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+  <img
+    src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/btc.png"
+    alt="Bitcoin"
+    width="42"
+    height="42"
+  />
+  <div>
+    <h2 style={{ margin: 0 }}>BTC Futures Market</h2>
+    <small className="muted">Bitcoin Derivatives & Funding</small>
+  </div>
+</div>
+
+  {btcDerivativesLoading ? (
+    <p className="muted">Loading BTC Futures data...</p>
+  ) : btcDerivativesData ? (
+    <>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '18px',
+        marginTop: '16px'
+      }}>
+        <div>
+          <small>Open Interest (BTC)</small>
+          <h2>
+            {btcDerivativesData.openInterestBTC.toLocaleString(
+              'en-US',
+              { maximumFractionDigits: 2 }
+            )}
+          </h2>
+        </div>
+
+        <div>
+          <small>Open Interest (USD)</small>
+          <h2>
+            ${btcDerivativesData.openInterestUSD.toLocaleString(
+              'en-US',
+              { maximumFractionDigits: 0 }
+            )}
+          </h2>
+        </div>
+
+        <div>
+          <small>Funding Rate</small>
+          <h2 style={{
+            color: btcDerivativesData.fundingRate >= 0
+              ? '#00c087'
+              : '#f6465d'
+          }}>
+            {(btcDerivativesData.fundingRate * 100).toFixed(4)}%
+          </h2>
+        </div>
+
+        <div>
+          <small>BTC Mark Price</small>
+          <h2>
+            ${btcDerivativesData.markPrice.toLocaleString(
+              'en-US',
+              { maximumFractionDigits: 2 }
+            )}
+          </h2>
+        </div>
+      </div>
+
+      <p className="muted">
+        Next Funding:
+        {' '}
+        {new Date(
+          btcDerivativesData.nextFundingTime
+        ).toLocaleString()}
+      </p>
+    </>
+  ) : (
+    <p className="muted">
+      BTC Futures data temporarily unavailable.
+    </p>
+  )}
+</div>
+    <div className="panel">
+
+<div className="panel">
+  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+  <img
+    src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/btc.png"
+    alt="Bitcoin"
+    width="42"
+    height="42"
+  />
+  <div>
+    <h2 style={{ margin: 0 }}>BTC Futures Historical Data</h2>
+    <small className="muted">Bitcoin Open Interest & Funding History</small>
+  </div>
+</div>
+
+  {btcHistoryLoading ? (
+    <p className="muted">Loading historical futures data...</p>
+  ) : btcOpenInterestHistory.length > 0 ? (
+    <>
+      <h3 style={{ marginTop: '16px' }}>
+        Open Interest (BTC)
+      </h3>
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'end',
+        gap: '5px',
+        height: '130px',
+        marginTop: '16px',
+        padding: '8px 0'
+      }}>
+        {btcOpenInterestHistory.map((item, index) => {
+          const value = Number(item.sumOpenInterest || 0);
+          const values = btcOpenInterestHistory.map(
+            row => Number(row.sumOpenInterest || 0)
+          );
+          const max = Math.max(...values, 1);
+          const min = Math.min(...values);
+          const height = Math.max(
+            5,
+            ((value - min) / Math.max(max - min, 1)) * 100
+          );
+
+          return (
+            <div
+              key={item.timestamp || index}
+              title={`${new Date(item.timestamp).toLocaleString()} — ${value.toFixed(2)} BTC`}
+              style={{
+                flex: 1,
+                height: `${height}%`,
+                minWidth: '3px',
+                background: '#f7931a',
+                borderRadius: '3px 3px 0 0'
+              }}
+            />
+          );
+        })}
+      </div>
+
+      <p className="muted">
+        Last 30 hourly data points
+      </p>
+
+      <h3 style={{ marginTop: '22px' }}>
+        Funding Rate History
+      </h3>
+
+      {btcFundingHistory.length > 0 ? (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          marginTop: '12px'
+        }}>
+          {btcFundingHistory.slice(-12).map((item, index) => {
+            const rate = Number(item.fundingRate) * 100;
+
+            return (
+              <div
+                key={item.fundingTime || index}
+                title={new Date(item.fundingTime).toLocaleString()}
+                style={{
+                  flex: '1 1 75px',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  background: '#20242c'
+                }}
+              >
+                <small className="muted">
+                  {new Date(item.fundingTime).toLocaleDateString()}
+                </small>
+                <h3 style={{
+                  color: rate >= 0 ? '#00c087' : '#f6465d'
+                }}>
+                  {rate.toFixed(4)}%
+                </h3>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="muted">Funding history unavailable.</p>
+      )}
+    </>
+  ) : (
+    <p className="muted">
+      Historical futures data temporarily unavailable.
+    </p>
+  )}
+</div>  
+
+<div className="panel">
+ <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+  <div style={{ display: 'flex', alignItems: 'center' }}>
+    <img
+      src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/btc.png"
+      alt="Bitcoin"
+      width="38"
+      height="38"
+    />
+    <img
+      src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/eth.png"
+      alt="Ethereum"
+      width="38"
+      height="38"
+      style={{ marginLeft: '-8px' }}
+    />
+  </div>
+  <div>
+    <h2 style={{ margin: 0 }}>Spot ETF Net Flow</h2>
+    <small className="muted">Bitcoin & Ethereum ETF Flows</small>
+  </div>
+</div>
+
+  {etfFlowLoading ? (
+    <p className="muted">Loading BTC and ETH ETF flows...</p>
+  ) : (
+    <>
+      {[
+        { name: 'Bitcoin ETF', symbol: 'BTC', rows: etfFlowData.btc, color: '#f7931a' },
+        { name: 'Ethereum ETF', symbol: 'ETH', rows: etfFlowData.eth, color: '#627eea' }
+      ].map(asset => {
+        const latest = asset.rows[0];
+
+        return (
+          <div key={asset.symbol} style={{ marginTop: '20px' }}>
+            <h3 style={{ color: asset.color }}>
+              {asset.name}
+            </h3>
+
+            {latest ? (
+              <>
+                <h2 style={{
+                  color: latest.flowUsd >= 0 ? '#00c087' : '#f6465d'
+                }}>
+                  {latest.flowUsd >= 0 ? '+' : '-'}$
+                  {Math.abs(latest.flowUsd).toLocaleString('en-US', {
+                    maximumFractionDigits: 0
+                  })}
+                </h2>
+
+                <small className="muted">
+                  {latest.flowUsd >= 0 ? 'Net Inflow' : 'Net Outflow'}
+                </small>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'end',
+                  gap: '5px',
+                  height: '75px',
+                  marginTop: '14px'
+                }}>
+                  {asset.rows.slice(0, 14).reverse().map((item, index, arr) => {
+                    const max = Math.max(
+                      ...arr.map(row => Math.abs(row.flowUsd)),
+                      1
+                    );
+
+                    const height = Math.max(
+                      5,
+                      (Math.abs(item.flowUsd) / max) * 100
+                    );
+
+                    return (
+                      <div
+                        key={item.date}
+                        title={`${item.date}: ${item.flowUsd >= 0 ? '+' : '-'}$${Math.abs(item.flowUsd).toLocaleString('en-US')}`}
+                        style={{
+                          flex: 1,
+                          height: `${height}%`,
+                          minWidth: '3px',
+                          background: item.flowUsd >= 0 ? '#00c087' : '#f6465d',
+                          borderRadius: '3px 3px 0 0'
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="muted">
+                No reported ETF flow data available.
+              </p>
+            )}
+          </div>
+        );
+      })}
+
+      <p className="muted" style={{ marginTop: '18px' }}>
+        Green = Inflow | Red = Outflow
+      </p>
+    </>
+  )}
+</div>
+
+<div className="panel">
+  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+  <span style={{
+    width: '42px',
+    height: '42px',
+    borderRadius: '50%',
+    background: 'rgba(246,70,93,0.13)',
+    color: '#f6465d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '24px'
+  }}>⇅</span>
+  <div>
+    <h2 style={{ margin: 0 }}>Liquidations & Volatility</h2>
+    <small className="muted">BTC Market Risk & Liquidation Activity</small>
+  </div>
+</div>
+
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginTop: '12px'
+  }}>
+    <span style={{
+      width: '9px',
+      height: '9px',
+      borderRadius: '50%',
+      background: liquidationStreamStatus === 'Connected'
+        ? '#00c087'
+        : '#f6465d'
+    }} />
+
+    <small className="muted">
+      Liquidation Stream: {liquidationStreamStatus}
+    </small>
+  </div>
+
+  <div style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '16px',
+    marginTop: '20px'
+  }}>
+    <div>
+      <small>24h Realized Volatility</small>
+
+      {btcVolatilityLoading ? (
+        <p className="muted">Loading...</p>
+      ) : btcVolatilityData ? (
+        <h2>{btcVolatilityData.volatility.toFixed(2)}%</h2>
+      ) : (
+        <p className="muted">Unavailable</p>
+      )}
+    </div>
+
+    <div>
+      <small>BTC 24h Price Change</small>
+
+      {btcVolatilityData ? (
+        <h2 style={{
+          color: btcVolatilityData.priceChange >= 0
+            ? '#00c087'
+            : '#f6465d'
+        }}>
+          {btcVolatilityData.priceChange >= 0 ? '+' : ''}
+          {btcVolatilityData.priceChange.toFixed(2)}%
+        </h2>
+      ) : (
+        <p className="muted">Unavailable</p>
+      )}
+    </div>
+  </div>
+
+  <p className="muted">
+    Recent BTC Liquidation Events
+  </p>
+
+  {btcLiquidations.length > 0 ? (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px',
+      marginTop: '12px'
+    }}>
+      {btcLiquidations.slice(0, 10).map(item => {
+        const isLong = item.side === 'SELL';
+
+        return (
+          <div
+            key={item.id}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px',
+              background: '#20242c',
+              borderRadius: '8px'
+            }}
+          >
+            <div>
+              <strong style={{
+                color: isLong ? '#f6465d' : '#00c087'
+              }}>
+                {isLong ? 'Long Liquidation' : 'Short Liquidation'}
+              </strong>
+
+              <p className="muted">
+                {new Date(item.time).toLocaleTimeString()}
+              </p>
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <strong>
+                ${item.value.toLocaleString('en-US', {
+                  maximumFractionDigits: 0
+                })}
+              </strong>
+
+              <p className="muted">
+                BTC: {item.quantity.toFixed(4)}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ) : (
+    <p className="muted">
+      No recent BTC liquidation events
+    </p>
+  )}
+
+  <p className="muted" style={{ marginTop: '16px' }}>
+  
+  </p>
+
+</div>
+
+      <h2>Market Data Status</h2>
+      <div className="panel">
+  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+  <div style={{ display: 'flex', alignItems: 'center' }}>
+    <img
+      src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/btc.png"
+      alt="Bitcoin"
+      width="38"
+      height="38"
+    />
+    <img
+      src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/eth.png"
+      alt="Ethereum"
+      width="38"
+      height="38"
+      style={{ marginLeft: '-8px' }}
+    />
+  </div>
+  <div>
+    <h2 style={{ margin: 0 }}>BTC & ETH Dominance</h2>
+    <small className="muted">IG Market Share</small>
+  </div>
+</div>
+
+  {globalCryptoData?.market_cap_percentage ? (
+    <>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '12px',
+        marginTop: '15px'
+      }}>
+        <div>
+          <small>Bitcoin Dominance</small>
+          <h2 style={{ color: '#f7931a' }}>
+            {Number(globalCryptoData.market_cap_percentage.btc).toFixed(2)}%
+          </h2>
+        </div>
+
+        <div>
+          <small>Ethereum Dominance</small>
+          <h2 style={{ color: '#627eea' }}>
+            {Number(globalCryptoData.market_cap_percentage.eth).toFixed(2)}%
+          </h2>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        width: '100%',
+        height: '12px',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        marginTop: '12px',
+        background: '#292929'
+      }}>
+        <div style={{
+          width: `${Number(globalCryptoData.market_cap_percentage.btc)}%`,
+          background: '#f7931a'
+        }} />
+
+        <div style={{
+          width: `${Number(globalCryptoData.market_cap_percentage.eth)}%`,
+          background: '#627eea'
+        }} />
+
+        <div style={{ flex: 1, background: '#777' }} />
+      </div>
+
+      <p className="muted">
+        Live IG cryptocurrency market dominance
+      </p>
+    </>
+  ) : (
+    <p className="muted">Loading live dominance data...</p>
+  )}
+</div>
+      <p className="muted">
+        {globalCryptoLoading
+          ? 'Connecting to market data providers...'
+          : globalCryptoData
+            ? 'IG market data loaded here BUY/SELL'
+            : 'Market data temporarily unavailable'}
+      </p>
+    </div>
+
+    <div className="panel form-panel">
+      <h2>Deposit Assets</h2>
+      <p className="muted">Deposit cryptocurrency into your IGtrade account.</p>
+      <button
+        className="btn btn-gold"
+        onClick={() => setPage('Deposit')}
+      >
+        Deposit Crypto
+      </button>
+    </div>
+  </section>
+)}
 
         {page === 'Withdraw' && (
           <section className="page-section narrow-page">
@@ -6273,7 +8146,7 @@ setTransferAmount(String(available));
         <strong>+{monthly.toFixed(8)} {earnCoin}</strong>
         <small>USDT equivalent: {rewardUSD(monthly)} USDT</small>
 
-        <span>Estimated Yearly Reward (365 days)</span>
+        <span>Estimated Yearly Reward (365)</span>
         <strong>+{yearly.toFixed(8)} {earnCoin}</strong>
         <small>USDT equivalent: {rewardUSD(yearly)} USDT</small>
       </>
@@ -6894,7 +8767,7 @@ setTelegramUrl={setTelegramUrl}
        
 
 <nav className="mobile-nav">
-  {['Home', 'Trade', 'Deposit', 'Assets', 'Earn'].map((item) => (
+  {['Home', 'Trade', 'Dashboard', 'Assets', 'Earn'].map((item) => (
     <button
       key={item}
       onClick={() => setPage(item)}
@@ -6913,11 +8786,23 @@ setTelegramUrl={setTelegramUrl}
           </svg>
         )}
 
-        {item === 'Deposit' && (
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 3v13m-5-5 5 5 5-5M4 20h16" />
-          </svg>
-        )}
+        {item === 'Dashboard' && (
+  <svg
+    viewBox="0 0 24 24"
+    width="22"
+    height="22"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="3" y="3" width="8" height="8" rx="2" />
+    <rect x="13" y="3" width="8" height="5" rx="1.5" />
+    <rect x="13" y="10" width="8" height="11" rx="2" />
+    <rect x="3" y="13" width="8" height="8" rx="2" />
+  </svg>
+)}
 
         {item === 'Assets' && (
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
