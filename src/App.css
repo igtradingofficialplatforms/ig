@@ -5910,3 +5910,36 @@ video {
 .fear-greed-tooltip p {
   margin: 3px 0;
 }
+/* Customer Service - Mobile & Desktop Fix */
+.customer-service-float {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: fixed !important;
+  right: 13px !important;
+  bottom: calc(82px + env(safe-area-inset-bottom)) !important;
+  z-index: 999999 !important;
+  pointer-events: auto !important;
+}
+
+@media (max-width: 800px) {
+  .customer-service-float {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    right: 12px !important;
+    bottom: calc(85px + env(safe-area-inset-bottom)) !important;
+    z-index: 999999 !important;
+  }
+
+  .customer-service-icon {
+    width: 42px !important;
+    height: 42px !important;
+    flex: 0 0 42px !important;
+  }
+
+  .customer-service-label {
+    display: block !important;
+    font-size: 11px !important;
+  }
+}
