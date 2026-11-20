@@ -369,16 +369,25 @@ function Candles({
   timeframe = '1m',
   onTimeframeChange = () => {}
 }) {
-  const [selectedCandle, setSelectedCandle] = useState(null)
+  
+const [selectedCandle, setSelectedCandle] = useState(null)
+const [hoverIndex, setHoverIndex] = useState(null)
+const [chartZoom, setChartZoom] = useState(1)
+const [crosshair, setCrosshair] = useState(null)
+const [touchDistance, setTouchDistance] = useState(null)
+const visibleCount = Math.max(
+  10,
+  Math.ceil(36 / chartZoom)
+)
 
-  const width = Math.max(1, candles.length) * 12
-
+const visibleCandles = candles.slice(-visibleCount)
+const candleSpacing = 16
+const candleBodyWidth = 9
+const width = Math.max(1, visibleCandles.length) * candleSpacing
   const values = [
-    ...candles.flatMap(c => [c.high, c.low]),
-    ...(targetPrice == null ? [] : [targetPrice]),
-    ...(entryPrice == null ? [] : [entryPrice]),
-    ...(currentPrice == null ? [] : [currentPrice])
-  ].filter(v => Number.isFinite(Number(v)))
+  ...visibleCandles.flatMap(c => [c.high, c.low]),
+  ...(currentPrice == null ? [] : [currentPrice])
+].filter(v => Number.isFinite(Number(v)))
 
   const rawMax = values.length ? Math.max(...values) : 1
   const rawMin = values.length ? Math.min(...values) : 0
@@ -388,7 +397,57 @@ function Candles({
   const span = Math.max(max - min, 0.000001)
 
   const y = value => 94 - ((Number(value) - min) / span) * 82
+const handleChartPointer = event => {
+  const rect = event.currentTarget.getBoundingClientRect()
 
+  const svgX = ((event.clientX - rect.left) / rect.width) * width
+  const svgY = ((event.clientY - rect.top) / rect.height) * 100
+
+  const index = Math.max(
+    0,
+    Math.min(
+      visibleCandles.length - 1,
+      Math.floor(svgX / 12)
+    )
+  )
+
+  const price = min + ((94 - svgY) / 82) * span
+
+  setCrosshair({
+    x: index * 12 + 6,
+    y: Math.max(0, Math.min(100, svgY)),
+    index,
+    price
+  })
+}
+const handleTouchStart = event => {
+  if (event.touches.length === 2) {
+    const dx = event.touches[0].clientX - event.touches[1].clientX
+    const dy = event.touches[0].clientY - event.touches[1].clientY
+
+    setTouchDistance(Math.sqrt(dx * dx + dy * dy))
+  }
+}
+
+const handleTouchMove = event => {
+  if (event.touches.length !== 2 || touchDistance == null) return
+
+  const dx = event.touches[0].clientX - event.touches[1].clientX
+  const dy = event.touches[0].clientY - event.touches[1].clientY
+  const nextDistance = Math.sqrt(dx * dx + dy * dy)
+
+  if (nextDistance > touchDistance + 5) {
+    setChartZoom(current => Math.min(8, current * 1.04))
+    setTouchDistance(nextDistance)
+  } else if (nextDistance < touchDistance - 5) {
+    setChartZoom(current => Math.max(1, current / 1.04))
+    setTouchDistance(nextDistance)
+  }
+}
+
+const handleTouchEnd = () => {
+  setTouchDistance(null)
+}
   const isSimulatedGold = candles.some(c => c.simulated)
 
   const elapsedPercent =
@@ -450,7 +509,82 @@ function Candles({
 
   return (
     <div className={`chart ${compact ? 'chart-compact' : ''}`}>
+     {/* Chart zoom controls */}
+<div style={{
+  display: 'flex',
+  justifyContent: 'flex-end',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 10px',
+  background: '#11100d',
+  borderBottom: '1px solid #383126'
+}}>
+  <span style={{
+    color: '#aaa08a',
+    fontSize: 10,
+    marginRight: 'auto'
+  }}>
+    CHART ZOOM
+  </span>
 
+  <button
+    type="button"
+    onClick={() => setChartZoom(v => Math.max(1, v / 1.25))}
+    style={{
+      background: '#191713',
+      color: '#f5d58a',
+      border: '1px solid #55452a',
+      borderRadius: 4,
+      width: 28,
+      height: 25,
+      cursor: 'pointer'
+    }}
+  >
+    −
+  </button>
+
+  <span style={{
+    color: '#d8b66d',
+    fontSize: 10,
+    minWidth: 38,
+    textAlign: 'center'
+  }}>
+    {Math.round(chartZoom * 100)}%
+  </span>
+
+  <button
+    type="button"
+    onClick={() => setChartZoom(v => Math.min(8, v * 1.25))}
+    style={{
+      background: '#191713',
+      color: '#f5d58a',
+      border: '1px solid #55452a',
+      borderRadius: 4,
+      width: 28,
+      height: 25,
+      cursor: 'pointer'
+    }}
+  >
+    +
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setChartZoom(1)}
+    style={{
+      background: '#191713',
+      color: '#aaa08a',
+      border: '1px solid #383126',
+      borderRadius: 4,
+      padding: '0 7px',
+      height: 25,
+      fontSize: 10,
+      cursor: 'pointer'
+    }}
+  >
+    Reset
+  </button>
+</div>
       {/* Chart timeframe controls */}
       <div style={{
         display: 'flex',
@@ -547,7 +681,36 @@ function Candles({
           </div>
         </div>
       )}
+{/* Crosshair price and time information */}
+{crosshair && (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+    padding: '7px 12px',
+    background: '#17140e',
+    borderBottom: '1px solid #383126',
+    fontSize: 11
+  }}>
+    <span style={{ color: '#d8b66d' }}>
+      CROSSHAIR PRICE
+      <strong style={{
+        color: '#f5d58a',
+        marginLeft: 7,
+        fontVariantNumeric: 'tabular-nums'
+      }}>
+        {formatPrice(crosshair.price)}
+      </strong>
+    </span>
 
+    <span style={{ color: '#aaa08a' }}>
+      {formatCandleTime(
+        visibleCandles[crosshair.index]?.time
+      )}
+    </span>
+  </div>
+)}
       {/* Selected candle OHLC information */}
       {selectedCandle && (
         <div style={{
@@ -610,15 +773,31 @@ function Candles({
             preserveAspectRatio="none"
             role="img"
             aria-label="Interactive market candlestick chart"
+              onPointerMove={handleChartPointer}
+              onTouchStart={handleTouchStart}
+             onTouchMove={handleTouchMove}
+             onTouchEnd={handleTouchEnd}
+              onWheel={event => {
+  event.preventDefault()
+
+  setChartZoom(current => {
+    const next = event.deltaY < 0
+      ? current * 1.2
+      : current / 1.2
+
+    return Math.max(1, Math.min(8, next))
+  })
+}}
+  onPointerLeave={() => setCrosshair(null)}
             style={{
               display: 'block',
               width: '100%',
-              height: compact ? 110 : 260,
-              touchAction: 'pan-y'
+              height: compact ? 130 : 320,
+              touchAction: 'none'
             }}
           >
-            {candles.map((c, i) => {
-              const x = i * 12 + 3
+          {visibleCandles.map((c, i) => {
+              const x = i * candleSpacing + (candleSpacing - candleBodyWidth) / 2
               const top = y(Math.max(c.open, c.close))
               const bottom = y(Math.min(c.open, c.close))
               const selected = selectedCandle?.time === c.time
@@ -632,9 +811,9 @@ function Candles({
                 >
                   {selected && (
                     <rect
-                      x={x - 2}
-                      y="1"
-                      width="10"
+                      x={x - 4}
+y="1"
+width={candleBodyWidth + 8}
                       height="98"
                       fill="#d8b66d"
                       opacity=".10"
@@ -642,19 +821,19 @@ function Candles({
                   )}
 
                   <line
-                    x1={x + 3}
-                    x2={x + 3}
+                    x1={x + candleBodyWidth / 2}
+                    x2={x + candleBodyWidth / 2}
                     y1={y(c.high)}
                     y2={y(c.low)}
                     stroke="currentColor"
-                    strokeWidth="1.2"
+                    strokeWidth="1.8"
                   />
 
                   <rect
                     x={x}
                     y={top}
-                    width="6"
-                    height={Math.max(1.5, bottom - top)}
+                    width={candleBodyWidth}
+                    height={Math.max(3, bottom - top)}
                     rx="1"
                     fill="currentColor"
                   />
@@ -669,16 +848,47 @@ function Candles({
                 </g>
               )
             })}
+            {crosshair && (
+  <g pointerEvents="none">
+    {/* Vertical crosshair */}
+    <line
+      x1={crosshair.x}
+      x2={crosshair.x}
+      y1="0"
+      y2="100"
+      stroke="#f5d58a"
+      strokeWidth="0.7"
+      strokeDasharray="2 2"
+      opacity="0.9"
+    />
 
+    {/* Horizontal crosshair */}
+    <line
+      x1="0"
+      x2={width}
+      y1={crosshair.y}
+      y2={crosshair.y}
+      stroke="#f5d58a"
+      strokeWidth="0.7"
+      strokeDasharray="2 2"
+      opacity="0.9"
+    />
+  </g>
+)}
             {currentPrice != null && (
               <line
                 x1="0"
                 x2={width}
                 y1={y(currentPrice)}
                 y2={y(currentPrice)}
-                stroke="#ffffff"
-                strokeWidth="1"
-                strokeDasharray="3 2"
+                stroke={
+  candles.length > 0 &&
+  currentPrice >= candles[candles.length - 1].open
+    ? '#00e6a0'
+    : '#ff4757'
+}
+strokeWidth="1.2"
+strokeDasharray="4 3"
               />
             )}
 
@@ -742,8 +952,8 @@ function Candles({
 
         {/* Right-side price scale */}
         <div style={{
-          width: 68,
-          minWidth: 68,
+          width: 76,
+minWidth: 76,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -756,8 +966,8 @@ function Candles({
             <span
               key={i}
               style={{
-                color: '#c5b990',
-                fontSize: 10,
+               color: '#D1D5DB',
+                fontSize: 17,
                 textAlign: 'right',
                 whiteSpace: 'nowrap',
                 fontVariantNumeric: 'tabular-nums'
@@ -768,26 +978,44 @@ function Candles({
           ))}
 
           {currentPrice != null && (
-            <strong style={{
-              color: '#fff',
-              background: '#287b55',
-              padding: '4px 2px',
-              borderRadius: 3,
-              textAlign: 'center',
-              fontSize: 10,
-              fontVariantNumeric: 'tabular-nums'
-            }}>
-              {formatPrice(currentPrice)}
-            </strong>
-          )}
+  <strong style={{
+    color: '#fff',
+    background:
+      candles.length > 0 &&
+      currentPrice >= visibleCandles[visibleCandles.length - 1].open
+        ? '#00a878'
+        : '#e04454',
+    padding: '4px 5px',
+    borderRadius: 3,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: 700,
+    fontVariantNumeric: 'tabular-nums',
+    whiteSpace: 'nowrap'
+  }}>
+    {formatPrice(currentPrice)}
+  </strong>
+)}
         </div>
       </div>
 
       <div className="chart-labels">
-        <span>{formatCandleTime(candles[0]?.time)}</span>
-        <span>{isSimulatedGold ? 'XAU/USD · LIVE' : 'MARKET'}</span>
-        <span>Now</span>
-      </div>
+  <span>
+    {formatCandleTime(visibleCandles[0]?.time)}
+  </span>
+
+  <span>
+    {formatCandleTime(
+      visibleCandles[Math.floor(visibleCandles.length / 2)]?.time
+    )}
+  </span>
+
+  <span>
+    {formatCandleTime(
+      visibleCandles[visibleCandles.length - 1]?.time
+    )}
+  </span>
+</div>
     </div>
   )
 }
@@ -4256,130 +4484,241 @@ candles = data.map(k => ({
   return () => window.removeEventListener('beforeinstallprompt', handler);
  
 }, []);
- // Gold simulated market: price stays between 3980 and 4095.
+ 
+// Gold live market: XAUS API
 useEffect(() => {
-  const MIN_PRICE = 3980;
-  const MAX_PRICE = 4095;
-  const START_PRICE = 4037.5;
+  let active = true;
+  let timer = null;
+  let sessionStart = null;
+  let candleTime = null;
+  let candleOpen = null;
+  let candleHigh = null;
+  let candleLow = null;
+  let lastPrice = null;
+  let isFetching = false;
 
-  let price = START_PRICE;
-  let candleOpen = START_PRICE;
-  let candleHigh = START_PRICE;
-  let candleLow = START_PRICE;
-  let candleTime = Math.floor(Date.now() / 30000) * 30000;
-  let sessionStart = START_PRICE;
+  const API_URL = 'https://xaus.com/api/v1/spot';
 
-  const initialCandles = Array.from({ length: 40 }, (_, i) => {
-    const base = START_PRICE + (Math.random() - 0.5) * 12;
-    const open = Math.max(MIN_PRICE, Math.min(MAX_PRICE, base));
-    const close = Math.max(
-      MIN_PRICE,
-      Math.min(MAX_PRICE, open + (Math.random() - 0.5) * 5)
-    );
+  const updateMarket = async () => {
+    if (!active || isFetching) return;
 
-    return {
-      time: candleTime - (39 - i) * 30000,
-      open,
-      high: Math.max(open, close) + Math.random() * 1.5,
-      low: Math.min(open, close) - Math.random() * 1.5,
-      close,
-      up: close >= open,
-      simulated: true
-    };
-  });
+    isFetching = true;
 
-  const lastInitial = initialCandles[initialCandles.length - 1];
-  price = lastInitial.close;
-  candleOpen = price;
-  candleHigh = price;
-  candleLow = price;
+    try {
+      const response = await fetch(API_URL, {
+        cache: 'no-store'
+      });
 
-  setLivePrices(prev => ({
-    ...prev,
-    XAU: {
-      price,
-      change: 0,
-      sessionStartPrice: sessionStart,
-      updatedAt: Date.now(),
-      source: 'Simulated Gold Market'
-    }
-  }));
-
-  setLiveCandles(prev => ({
-    ...prev,
-    XAU: initialCandles
-  }));
-
-  setMarketConnection(prev => ({
-    ...prev,
-    gold: 'simulated'
-  }));
-
-  const timer = setInterval(() => {
-    const now = Date.now();
-    const movement = (Math.random() - 0.49) * 1.8;
-
-    price = Math.max(
-      MIN_PRICE,
-      Math.min(MAX_PRICE, price + movement)
-    );
-
-    const nextCandleTime = Math.floor(now / 30000) * 30000;
-
-    if (nextCandleTime !== candleTime) {
-      candleTime = nextCandleTime;
-      candleOpen = price;
-      candleHigh = price;
-      candleLow = price;
-    } else {
-      candleHigh = Math.max(candleHigh, price);
-      candleLow = Math.min(candleLow, price);
-    }
-
-   
-const candle = {
-  time: candleTime,
-  open: candleOpen,
-  high: candleHigh,
-  low: candleLow,
-  close: price,
-  volume: 0,
-  quoteVolume: 0,
-  trades: 0,
-  up: price >= candleOpen,
-  simulated: true
-};
-
-    setLivePrices(prev => ({
-      ...prev,
-      XAU: {
-        ...prev.XAU,
-        price,
-        change: ((price - sessionStart) / sessionStart) * 100,
-        updatedAt: now,
-        source: 'Simulated Gold Market'
+      if (!response.ok) {
+        throw new Error(`XAUS API error: ${response.status}`);
       }
-    }));
 
-    setLiveCandles(prev => {
-      const next = [...(prev.XAU || [])];
-      const last = next[next.length - 1];
+      const data = await response.json();
+      const newPrice = Number(data?.spot_usd_oz);
 
-      if (last?.time === candle.time) {
-        next[next.length - 1] = candle;
+      if (
+        !Number.isFinite(newPrice) ||
+        newPrice <= 0 ||
+        data?.stale === true ||
+        data?.data_state?.status !== 'fresh'
+      ) {
+        throw new Error('Gold price is stale or unavailable');
+      }
+
+      if (!active) return;
+
+      const now = Date.now();
+      const priceTime = Date.parse(data.price_as_of || data.updated_at);
+      const updatedAt = Number.isFinite(priceTime) ? priceTime : now;
+
+      if (sessionStart === null) {
+        sessionStart = newPrice;
+      }
+
+      const nextCandleTime = Math.floor(now / 60000) * 60000;
+
+      if (candleTime !== nextCandleTime) {
+        candleTime = nextCandleTime;
+        candleOpen = lastPrice ?? newPrice;
+        candleHigh = Math.max(candleOpen, newPrice);
+        candleLow = Math.min(candleOpen, newPrice);
       } else {
-        next.push(candle);
+        candleHigh = Math.max(candleHigh, newPrice);
+        candleLow = Math.min(candleLow, newPrice);
       }
 
-      return {
-        ...prev,
-        XAU: next.slice(-60)
-      };
-    });
-  }, 1000);
+      lastPrice = newPrice;
 
-  return () => clearInterval(timer);
+      const candle = {
+        time: candleTime,
+        open: candleOpen,
+        high: candleHigh,
+        low: candleLow,
+        close: newPrice,
+        volume: 0,
+        quoteVolume: 0,
+        trades: 0,
+        up: newPrice >= candleOpen,
+        simulated: false
+      };
+
+      setLivePrices(prev => ({
+        ...prev,
+        XAU: {
+          ...prev.XAU,
+          price: newPrice,
+          change: ((newPrice - sessionStart) / sessionStart) * 100,
+          sessionStartPrice: sessionStart,
+          updatedAt,
+          source: 'XAUS Live Gold API',
+          stale: false
+        }
+      }));
+
+      setLiveCandles(prev => {
+        const next = [...(prev.XAU || [])];
+        const last = next[next.length - 1];
+
+        if (last?.time === candle.time) {
+          next[next.length - 1] = candle;
+        } else {
+          next.push(candle);
+        }
+
+        return {
+          ...prev,
+          XAU: next.slice(-60)
+        };
+      });
+
+      setMarketConnection(prev => ({
+        ...prev,
+        gold: 'connected'
+      }));
+
+    } catch (error) {
+      console.error('XAUS Gold API failed:', error);
+
+      if (!active) return;
+
+      setMarketConnection(prev => ({
+        ...prev,
+        gold: 'disconnected'
+      }));
+
+      setLivePrices(prev => ({
+        ...prev,
+        XAU: {
+          ...prev.XAU,
+          stale: true
+        }
+      }));
+
+    } finally {
+      isFetching = false;
+    }
+  };
+
+  updateMarket();
+  timer = setInterval(updateMarket, 60000);
+
+  return () => {
+    active = false;
+    if (timer) clearInterval(timer);
+  };
 }, []);
+
+// Load real XAUS historical Gold candles
+useEffect(() => {
+  if (selected !== 'XAU') return;
+
+  const controller = new AbortController();
+
+  const loadGoldHistory = async () => {
+    try {
+      const interval = chartTimeframe === '1h'
+        ? '60m'
+        : chartTimeframe;
+
+      const url = new URL('https://xaus.com/api/v1/chart');
+      url.searchParams.set('symbol', 'xau');
+      url.searchParams.set('range', '1d');
+      url.searchParams.set('interval', interval);
+
+      const response = await fetch(url.toString(), {
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`XAUS chart API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data.points) || !data.points.length) {
+        throw new Error('No historical Gold candles returned');
+      }
+
+      const historicalCandles = data.points.map(p => {
+        const rawTime = Number(p.t);
+
+        return {
+          time: rawTime < 1000000000000
+            ? rawTime * 1000
+            : rawTime,
+          open: Number(p.o),
+          high: Number(p.h),
+          low: Number(p.l),
+          close: Number(p.c),
+          volume: Number(p.v || 0),
+          up: Number(p.c) >= Number(p.o),
+          simulated: false
+        };
+      }).filter(c =>
+        Number.isFinite(c.time) &&
+        [c.open, c.high, c.low, c.close].every(Number.isFinite)
+      );
+
+      if (!historicalCandles.length) {
+        throw new Error('Invalid historical Gold candle data');
+      }
+
+      if (controller.signal.aborted) return;
+
+      setLiveCandles(prev => {
+        const existing = prev.XAU || [];
+        const merged = new Map();
+
+        historicalCandles.forEach(c => merged.set(c.time, c));
+        existing.forEach(c => merged.set(c.time, c));
+
+        return {
+          ...prev,
+          XAU: [...merged.values()]
+            .sort((a, b) => a.time - b.time)
+            .slice(-120)
+        };
+      });
+
+      setMarketConnection(prev => ({
+        ...prev,
+        gold: 'connected'
+      }));
+
+      console.log('XAUS historical Gold candles loaded:', historicalCandles.length);
+
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('XAUS historical chart failed:', error);
+      }
+    }
+  };
+
+  loadGoldHistory();
+
+  return () => controller.abort();
+}, [selected, chartTimeframe]);
+
   const installApp = async () => {
     if (installPrompt) { installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null) }
     else setToast('Android/desktop: use your browser menu → Install app or Add to Home Screen. On iPhone: Safari Share → Add to Home Screen.')
@@ -4569,7 +4908,15 @@ const finishTrade = async () => {
   
 const startTrade = async () => {
   const n = Number(amount);
+const tradePrice = Number(
+  asset.symbol === 'XAU'
+    ? livePrices?.XAU?.price || asset.price || 0
+    : asset.price
+);
 
+if (!Number.isFinite(tradePrice) || tradePrice <= 0) {
+  return setToast('No valid market price is available.');
+}
   const limits = duration === 30
     ? [20, 10000]
     : duration === 60
@@ -4589,11 +4936,6 @@ const startTrade = async () => {
   if (trade && !trade.done) {
     return setToast('Finish the current trade first.');
   }
-
-  if (asset.price == null) {
-    return setToast('Live price is not connected.');
-  }
-
   if (!supabase || !authSession?.user?.id) {
     return setToast('Please sign in before trading.');
   }
@@ -4604,11 +4946,11 @@ const startTrade = async () => {
     : duration === 60 ? 0.40 : 0.80;
 
   const targetPrice = Number(
-    (asset.price * (
+    (tradePrice * (
       direction === 'BUY'
         ? 1 + rate / 100
         : 1 - rate / 100
-    )).toFixed(asset.price < 10 ? 5 : 2)
+    )).toFixed(tradePrice < 10 ? 5 : 2)
   );
 
   setTradeStarting(true);
@@ -4621,7 +4963,7 @@ const startTrade = async () => {
         p_trade_type: direction,
         p_amount: n,
         p_duration_seconds: duration,
-        p_entry_price: Number(asset.price),
+        p_entry_price: tradePrice,
         p_profit_percentage: Math.round(rate * 100),
         p_target_price: targetPrice
       }
@@ -4641,8 +4983,8 @@ const startTrade = async () => {
       id: data.trade_id,
       symbol: asset.symbol,
       assetName: asset.name,
-      price: asset.price,
-      openPrice: asset.price,
+      price: tradePrice,
+      openPrice: tradePrice,
       targetPrice,
       endPrice: null,
       amount: n,
@@ -5768,7 +6110,31 @@ if (!authSession && !isAdminRoute) {
     ))}
 </div>
 
-          <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? 'Change since connection unavailable' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}</span></div></div><Candles
+          <div className="lower-grid"><div className="panel chart-panel"><div className="panel-head"><div><span className="eyebrow">MARKET CHART</span><h2>{asset.name} <span className="muted">({asset.pair})</span></h2></div><div className="price-stack">
+  <strong className={
+    asset.change == null
+      ? ''
+      : asset.change >= 0
+        ? 'positive'
+        : 'negative'
+  }>
+    {asset.price == null
+      ? 'Live price unavailable'
+      : quotePrice(asset.price, asset.symbol)}
+  </strong>
+
+  <span className={
+    asset.change == null
+      ? ''
+      : asset.change >= 0
+        ? 'positive'
+        : 'negative'
+  }>
+    {asset.change == null
+      ? 'Change since connection unavailable'
+      : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}% since connection`}
+  </span>
+</div></div><Candles
   Candles
   compact
   candles={liveCandles[asset.symbol] || []}
@@ -5890,7 +6256,31 @@ if (!authSession && !isAdminRoute) {
   <div className="asset-info">
     <strong className="market-symbol">{asset.pair}</strong>
     <small>{asset.name}</small>
-  </div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack"><strong>{asset.price == null ? 'Live price unavailable' : quotePrice(asset.price, asset.symbol)}</strong><span className={asset.change >= 0 ? 'positive' : 'negative'}>{asset.change == null ? '—' : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}</span></div></div><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">
+  </div><select value={selected} onChange={e => setSelected(e.target.value)}>{markets.map(m => <option key={m.symbol} value={m.symbol}>{m.pair} — {m.name}</option>)}</select></div><div className="price-stack">
+  <strong className={
+    asset.change == null
+      ? ''
+      : asset.change >= 0
+        ? 'positive'
+        : 'negative'
+  }>
+    {asset.price == null
+      ? 'Live price unavailable'
+      : quotePrice(asset.price, asset.symbol)}
+  </strong>
+
+  <span className={
+    asset.change == null
+      ? ''
+      : asset.change >= 0
+        ? 'positive'
+        : 'negative'
+  }>
+    {asset.change == null
+      ? '—'
+      : `${asset.change > 0 ? '+' : ''}${asset.change.toFixed(2)}%`}
+  </span>
+</div></div><div className="chart-legend"><span><i className="legend-green" /> Up candle</span><span><i className="legend-red" /> Down candle</span><span className="muted">
   {asset.symbol === 'XAU'
     ? ''
     : 'Live'}
