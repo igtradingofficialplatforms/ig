@@ -8,6 +8,7 @@ import {
   SiTesla
 } from "react-icons/si";
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import './consoleWelcome.js';
 import countryToCurrency from 'country-to-currency';
 import AdminPanel from './Admin.jsx'
 import CustomerService from './CustomerService.jsx'
@@ -71,39 +72,43 @@ const supabase = isSupabaseConfigured
     })
   : null
 
+
 async function trackActivity(eventType, pagePath = null) {
   try {
     if (!supabase) return;
 
     const {
-      data: { session }
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: sessionError
+    } = await supabase.auth.getUser();
 
-    if (!session?.access_token) return;
+    if (sessionError || !user) return;
 
-    const response = await fetch('/api/track', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({
-        eventType,
-        pagePath
-      })
-    });
+    const { error } = await supabase
+      .from('user_activity')
+      .insert({
+        user_id: user.id,
+        event_type: eventType,
+        page_path: pagePath
+      });
 
-    if (!response.ok) {
-      console.error('Activity tracking failed');
-    }
+    
+if (error) {
+  console.error('Activity tracking failed:', {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint
+  });
+} else {
+  console.log('Activity saved successfully');
+}
+
   } catch (error) {
     console.error('Activity tracking error:', error);
   }
 }
 
-console.log('Supabase URL loaded:', Boolean(import.meta.env.VITE_SUPABASE_URL))
-console.log('Supabase key loaded:', Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY))
-console.log('Supabase configured:', isSupabaseConfigured)
 async function uploadDepositProof(file, userId) {
   if (!supabase) throw new Error('Supabase is not configured.')
   if (!file) throw new Error('Please attach a deposit screenshot.')
@@ -1228,10 +1233,7 @@ const handlePasswordChange = async () => {
   }
 
   setPasswordBusy(true);
-console.log('PASSWORD VALIDATION PASSED');
   try {
-console.log('User email:', authSession?.user?.email);
-console.log('User phone:', authSession?.user?.phone);
     const { error: verifyError } = await supabase.auth.signInWithPassword(
       authSession.user.phone
         ? {
@@ -1268,6 +1270,7 @@ console.log('User phone:', authSession?.user?.phone);
 
   const [countryCode, setCountryCode] = useState('')
   const [page, setPage] = useState('Home')
+
   const [showPasswordChange, setShowPasswordChange] = useState(false);
 const [currentPassword, setCurrentPassword] = useState('');
 const [newPassword, setNewPassword] = useState('');
@@ -1730,6 +1733,76 @@ const [ethBalance, setEthBalance] = useState(0);
   const [depositMethod, setDepositMethod] = useState('TRC20')
   const [depositAmount, setDepositAmount] = useState('50')
   const [depositFile, setDepositFile] = useState(null)
+  const [depositAssets, setDepositAssets] = useState([]);
+  const [fiatCurrency, setFiatCurrency] = useState('USD');
+const [fiatAmount, setFiatAmount] = useState('100');
+const [fiatPaymentMethod, setFiatPaymentMethod] = useState('Bank Transfer');
+const [fiatDepositReview, setFiatDepositReview] = useState(false);
+const [fiatCurrencySearch, setFiatCurrencySearch] = useState('');
+const [fiatDepositStep, setFiatDepositStep] = useState('select');
+const fiatCurrencies = [
+  { code: 'USD', name: 'US Dollar', symbol: '$', flag: '🇺🇸' },
+  { code: 'EUR', name: 'Euro', symbol: '€', flag: '🇪🇺' },
+  { code: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧' },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: '$', flag: '🇨🇦' },
+  { code: 'AUD', name: 'Australian Dollar', symbol: '$', flag: '🇦🇺' },
+  { code: 'SGD', name: 'Singapore Dollar', symbol: '$', flag: '🇸🇬' },
+  { code: 'CHF', name: 'Swiss Franc', symbol: 'Fr', flag: '🇨🇭' },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', flag: '🇯🇵' },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: '¥', flag: '🇨🇳' },
+  { code: 'HKD', name: 'Hong Kong Dollar', symbol: '$', flag: '🇭🇰' },
+  { code: 'INR', name: 'Indian Rupee', symbol: '₹', flag: '🇮🇳' },
+  { code: 'BDT', name: 'Bangladeshi Taka', symbol: '৳', flag: '🇧🇩' },
+  { code: 'NZD', name: 'New Zealand Dollar', symbol: '$', flag: '🇳🇿' },
+  { code: 'SEK', name: 'Swedish Krona', symbol: 'kr', flag: '🇸🇪' },
+  { code: 'NOK', name: 'Norwegian Krone', symbol: 'kr', flag: '🇳🇴' },
+  { code: 'DKK', name: 'Danish Krone', symbol: 'kr', flag: '🇩🇰' },
+  { code: 'PLN', name: 'Polish Zloty', symbol: 'zł', flag: '🇵🇱' },
+  { code: 'CZK', name: 'Czech Koruna', symbol: 'Kč', flag: '🇨🇿' },
+  { code: 'HUF', name: 'Hungarian Forint', symbol: 'Ft', flag: '🇭🇺' },
+  { code: 'RON', name: 'Romanian Leu', symbol: 'lei', flag: '🇷🇴' },
+  { code: 'TRY', name: 'Turkish Lira', symbol: '₺', flag: '🇹🇷' },
+  { code: 'RUB', name: 'Russian Ruble', symbol: '₽', flag: '🇷🇺' },
+  { code: 'UAH', name: 'Ukrainian Hryvnia', symbol: '₴', flag: '🇺🇦' },
+  { code: 'KRW', name: 'South Korean Won', symbol: '₩', flag: '🇰🇷' },
+  { code: 'THB', name: 'Thai Baht', symbol: '฿', flag: '🇹🇭' },
+  { code: 'MYR', name: 'Malaysian Ringgit', symbol: 'RM', flag: '🇲🇾' },
+  { code: 'IDR', name: 'Indonesian Rupiah', symbol: 'Rp', flag: '🇮🇩' },
+  { code: 'PHP', name: 'Philippine Peso', symbol: '₱', flag: '🇵🇭' },
+  { code: 'VND', name: 'Vietnamese Dong', symbol: '₫', flag: '🇻🇳' },
+  { code: 'PKR', name: 'Pakistani Rupee', symbol: '₨', flag: '🇵🇰' },
+  { code: 'LKR', name: 'Sri Lankan Rupee', symbol: 'Rs', flag: '🇱🇰' },
+  { code: 'NPR', name: 'Nepalese Rupee', symbol: 'रू', flag: '🇳🇵' },
+  { code: 'AED', name: 'UAE Dirham', symbol: 'د.إ', flag: '🇦🇪' },
+  { code: 'SAR', name: 'Saudi Riyal', symbol: '﷼', flag: '🇸🇦' },
+  { code: 'QAR', name: 'Qatari Riyal', symbol: 'ر.ق', flag: '🇶🇦' },
+  { code: 'KWD', name: 'Kuwaiti Dinar', symbol: 'د.ك', flag: '🇰🇼' },
+  { code: 'BHD', name: 'Bahraini Dinar', symbol: '.د.ب', flag: '🇧🇭' },
+  { code: 'OMR', name: 'Omani Rial', symbol: 'ر.ع.', flag: '🇴🇲' },
+  { code: 'JOD', name: 'Jordanian Dinar', symbol: 'د.ا', flag: '🇯🇴' },
+  { code: 'ILS', name: 'Israeli Shekel', symbol: '₪', flag: '🇮🇱' },
+  { code: 'ZAR', name: 'South African Rand', symbol: 'R', flag: '🇿🇦' },
+  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬' },
+  { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: '🇰🇪' },
+  { code: 'EGP', name: 'Egyptian Pound', symbol: 'E£', flag: '🇪🇬' },
+  { code: 'MAD', name: 'Moroccan Dirham', symbol: 'د.م.', flag: '🇲🇦' },
+  { code: 'TND', name: 'Tunisian Dinar', symbol: 'د.ت', flag: '🇹🇳' },
+  { code: 'BRL', name: 'Brazilian Real', symbol: 'R$', flag: '🇧🇷' },
+  { code: 'MXN', name: 'Mexican Peso', symbol: '$', flag: '🇲🇽' },
+  { code: 'ARS', name: 'Argentine Peso', symbol: '$', flag: '🇦🇷' },
+  { code: 'CLP', name: 'Chilean Peso', symbol: '$', flag: '🇨🇱' }
+];
+const [selectedDepositCurrency, setSelectedDepositCurrency] = useState('');
+const [depositCoinStep, setDepositCoinStep] = useState('select');
+const [selectedDepositAssetId, setSelectedDepositAssetId] = useState('');
+const [depositAssetsLoading, setDepositAssetsLoading] = useState(false);
+const [depositMode, setDepositMode] = useState('home');
+const [buyCryptoCoin, setBuyCryptoCoin] = useState('BTC');
+const [buyCryptoSearch, setBuyCryptoSearch] = useState('');
+const [buyCryptoStep, setBuyCryptoStep] = useState('select');
+const [buyCryptoReview, setBuyCryptoReview] = useState(false);
+const [buyCryptoAmount, setBuyCryptoAmount] = useState('100');
+const [buyPaymentMethod, setBuyPaymentMethod] = useState('Card');
   const [withdrawMethod, setWithdrawMethod] = useState('TRC20')
   const [withdrawAddress, setWithdrawAddress] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
@@ -2016,51 +2089,111 @@ useEffect(() => {
 
   loadSavedWalletAddresses()
 }, [authSession?.user?.id])
-  useEffect(() => {
-    if (!supabase) return;
 
-    const loadWalletAddresses = async () => {
+useEffect(() => {
+  if (!supabase) return;
+
+  let active = true;
+
+  const loadWalletAddresses = async () => {
+    setDepositAssetsLoading(true);
+
+    try {
       const { data, error } = await supabase
         .from('deposit_addresses')
-        .select('currency, network, wallet_address, instructions, is_active, qr_path')
-        .eq('is_active', true);
+        .select('id, currency, network, wallet_address, instructions, is_active, qr_path')
+        .eq('is_active', true)
+        .order('currency', { ascending: true });
 
-      if (error) {
-        console.error('Wallet loading error:', error.message);
-        return;
-      }
-      console.log('Wallet rows from Supabase:', data);
-      const addresses = {
+      if (error) throw error;
+      if (!active) return;
+
+      const assets = (data || []).map(item => {
+        let qrUrl = '';
+
+        if (item.qr_path) {
+          if (item.qr_path.startsWith('http')) {
+            qrUrl = item.qr_path;
+          } else {
+            const { data: publicData } = supabase.storage
+              .from('deposit-qr-codes')
+              .getPublicUrl(item.qr_path);
+
+            qrUrl = publicData?.publicUrl || '';
+          }
+        }
+
+        return {
+          ...item,
+          currency: String(item.currency || '').trim().toUpperCase(),
+          network: String(item.network || '').trim(),
+          qr_url: qrUrl
+        };
+      });
+
+      setDepositAssets(assets);
+
+      setSelectedDepositCurrency(previous => {
+        if (previous && assets.some(item => item.currency === previous)) {
+          return previous;
+        }
+
+        return assets[0]?.currency || '';
+      });
+
+      setSelectedDepositAssetId(previous => {
+        if (previous && assets.some(item => String(item.id) === String(previous))) {
+          return previous;
+        }
+
+        return assets[0]?.id ? String(assets[0].id) : '';
+      });
+
+      const legacyAddresses = {
         TRC20: '',
         BTC: '',
-        ETH: '',
+        ETH: ''
       };
 
-      for (const item of data || []) {
-        const currency = String(item.currency || '')
-          .trim()
-          .toUpperCase();
+      const legacyQrCodes = {
+        TRC20: '',
+        BTC: '',
+        ETH: ''
+      };
 
-        const network = String(item.network || '')
-          .trim()
-          .toUpperCase();
+      assets.forEach(item => {
+        const network = item.network.toUpperCase();
 
-        if (currency === 'USDT' && network.includes('TRC20')) {
-          addresses.TRC20 = item.wallet_address || '';
-        } else if (currency === 'BTC') {
-          addresses.BTC = item.wallet_address || '';
-        } else if (currency === 'ETH') {
-          addresses.ETH = item.wallet_address || '';
+        if (item.currency === 'USDT' && network.includes('TRC20')) {
+          legacyAddresses.TRC20 = item.wallet_address || '';
+          legacyQrCodes.TRC20 = item.qr_url || '';
+        } else if (item.currency === 'BTC') {
+          legacyAddresses.BTC = item.wallet_address || '';
+          legacyQrCodes.BTC = item.qr_url || '';
+        } else if (item.currency === 'ETH') {
+          legacyAddresses.ETH = item.wallet_address || '';
+          legacyQrCodes.ETH = item.qr_url || '';
         }
+      });
+
+      setWalletAddresses(legacyAddresses);
+      setWalletQrCodes(legacyQrCodes);
+
+    } catch (error) {
+      console.error('Deposit assets loading failed:', error);
+    } finally {
+      if (active) {
+        setDepositAssetsLoading(false);
       }
+    }
+  };
 
-      setWalletAddresses(addresses);
-      console.log('Loaded wallet addresses:', addresses);
-    };
+  loadWalletAddresses();
 
-    loadWalletAddresses();
-  }, []);
-
+  return () => {
+    active = false;
+  };
+}, [supabase, page]);
   const [telegramUrl, setTelegramUrl] = useState('https://t.me/igtrading_platforms93')
 
   const [livePrices, setLivePrices] = useState({});
@@ -2487,11 +2620,10 @@ useEffect(() => {
   };
 
   ws.onerror = (error) => {
-    console.error('Binance ticker WebSocket error:', error);
   };
 
   ws.onclose = () => {
-    console.log('Binance ticker WebSocket disconnected');
+  
   };
 
   return () => {
@@ -3077,19 +3209,12 @@ useEffect(() => {
         throw new Error('IP location request failed');
       }
 const geo = await geoResponse.json();
-console.log('IP GEO RESPONSE:', geo);
-
 if (stopped) return;
 
 if (geo.success === false || !geo.country_code) {
   throw new Error('IP country detection failed');
 }
-console.log('COUNTRY CURRENCY LOOKUP:', geo.country_code);
-
 const currency = countryToCurrency[geo.country_code];
-console.log('VISITOR COUNTRY:', geo.country);
-console.log('VISITOR COUNTRY CODE:', geo.country_code);
-console.log('DETECTED CURRENCY:', currency);
 if (!currency) {
   throw new Error(
     `Currency mapping unavailable for ${geo.country_code}`
@@ -3138,8 +3263,6 @@ const loadForexRate = async () => {
     if (!stopped) {
       setLocalCurrencyRate(rate);
     }
-
-    console.log('LOCAL CURRENCY RATE:', currency, rate);
   } catch (error) {
     console.error('Forex rate error:', error);
   }
@@ -3222,31 +3345,31 @@ useEffect(() => {
       const k = message.k;
 
       setLiveCandles(previous => {
-        const oldCandles = previous[baseSymbol] || [];
+  const oldCandles = previous[baseSymbol] || [];
 
-        const candle = {
-          time: Number(k.t),
-          open: Number(k.o),
-          high: Number(k.h),
-          low: Number(k.l),
-          close: Number(k.c),
-          up: Number(k.c) >= Number(k.o)
-        };
+  const candle = {
+    time: Number(k.t),
+    open: Number(k.o),
+    high: Number(k.h),
+    low: Number(k.l),
+    close: Number(k.c),
+    up: Number(k.c) >= Number(k.o)
+  };
 
-        const next = [...oldCandles];
-        const last = next[next.length - 1];
+  const next = [...oldCandles];
+  const last = next[next.length - 1];
 
-        if (last?.time === candle.time) {
-          next[next.length - 1] = candle;
-        } else {
-          next.push(candle);
-        }
+  if (last?.time === candle.time) {
+    next[next.length - 1] = candle;
+  } else {
+    next.push(candle);
+  }
 
-        return {
-          ...previous,
-          [baseSymbol]: next.slice(-500)
-        };
-      });
+  return {
+    ...previous,
+    [baseSymbol]: next.slice(-500)
+  };
+});
     } catch (error) {
       console.error('Binance Kline update error:', error);
     }
@@ -3455,7 +3578,6 @@ setEthBalance(Number(data.eth_balance || 0));
     const { data, error } = await supabase.rpc(
       'admin_list_funding_requests'
     );
-   console.log('ADMIN FUNDING REQUESTS RESULT:', { data, error });
     if (!active) return;
 
     if (error) {
@@ -3464,18 +3586,23 @@ setEthBalance(Number(data.eth_balance || 0));
       return;
     }
 
-    setRequests((data || []).map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      type: row.type,
-      method: row.method || '',
-      amount: Number(row.amount),
-      status: row.status,
-      created: row.created,
-      adminNote: row.admin_note || '',
-      address: row.address || '',
-      proof_path: row.proof_path || ''
-    })));
+      setRequests((data || []).map(row => ({
+  id: row.id,
+  userId: row.user_id,
+  type: row.type,
+  method: row.method || '',
+  currency: row.currency || '',
+  amount: Number(row.amount || 0),
+  paymentAmountUsd: Number(row.payment_amount_usd || 0),
+  adminCreditAmount: Number(
+    row.admin_credit_amount ?? row.amount ?? 0
+  ),
+  status: row.status,
+  created: row.created,
+  adminNote: row.admin_note || '',
+  address: row.address || '',
+  proof_path: row.proof_path || ''
+})));
   };
 
   loadFundingRequests();
@@ -3752,6 +3879,15 @@ const refreshAccount = async () => {
   ...cryptoMarkets
 ];
   const asset = markets.find(m => m.symbol === selected) || markets[0]
+
+const buyCryptoMarketPrice = Number(
+  markets.find(m => m.symbol === buyCryptoCoin)?.price || 0
+);
+
+const estimatedBuyCrypto =
+  buyCryptoMarketPrice > 0 && Number(buyCryptoAmount) > 0
+    ? Number(buyCryptoAmount) / buyCryptoMarketPrice
+    : null;
 useEffect(() => {
   let retryTimer;
   let closed = false;
@@ -3805,14 +3941,14 @@ useEffect(() => {
           setLiveCandles(prev => {
             const next = [...(prev[symbol] || [])];
 
-            const candle = {
-              time: Number(k.t),
-              open: Number(k.o),
-              high: Number(k.h),
-              low: Number(k.l),
-              close: Number(k.c),
-              up: Number(k.c) >= Number(k.o)
-            };
+           const candle = {
+  time: Number(k.t),
+  open: Number(k.o),
+  high: Number(k.h),
+  low: Number(k.l),
+  close: Number(k.c),
+  up: Number(k.c) >= Number(k.o)
+};
 
             const last = next[next.length - 1];
 
@@ -4202,17 +4338,17 @@ useEffect(() => {
 
    
 const candle = {
-  time: Number(k.t),
-  open: Number(k.o),
-  high: Number(k.h),
-  low: Number(k.l),
-  close: Number(k.c),
-  volume: Number(k.v),
-  quoteVolume: Number(k.q),
-  trades: Number(k.n),
-  up: Number(k.c) >= Number(k.o)
+  time: candleTime,
+  open: candleOpen,
+  high: candleHigh,
+  low: candleLow,
+  close: price,
+  volume: 0,
+  quoteVolume: 0,
+  trades: 0,
+  up: price >= candleOpen,
+  simulated: true
 };
-
 
     setLivePrices(prev => ({
       ...prev,
@@ -4628,30 +4764,58 @@ const saveWalletSettings = async (qrFiles) => {
 };
 
  
+
 const submitDeposit = async (e) => {
   e.preventDefault();
 
+  // User-entered USD amount
   const n = Number(depositAmount);
-  const currency = depositMethod === 'TRC20' ? 'USDT' : depositMethod;
+
+  const selectedAsset = depositAssets.find(
+    item => String(item.id) === String(selectedDepositAssetId)
+  );
+
+  if (!selectedAsset) {
+    return setToast('Please select an available deposit coin and network.');
+  }
+
+  const currency = selectedAsset.currency;
+  const network = selectedAsset.network;
   const userId = authSession?.user?.id;
-console.log('DEPOSIT DEBUG:', {
-  depositAmount,
-  n,
-  depositMethod,
-  currency,
-  userId
-});
+
   if (!supabase || !userId) {
     return setToast('Please log in first.');
   }
 
   if (!Number.isFinite(n) || n <= 0) {
-  return setToast('Enter a valid deposit amount.');
-}
+    return setToast('Enter a valid USD amount.');
+  }
 
-if (depositMethod === 'TRC20' && n < 50) {
-  return setToast('Minimum USDT deposit request is 50.');
-}
+  // Minimum $50 for USDT TRC20
+  if (
+    currency === 'USDT' &&
+    network.toUpperCase().includes('TRC20') &&
+    n < 50
+  ) {
+    return setToast('Minimum USDT deposit request is $50 USD.');
+  }
+
+  // Require an available live conversion price
+  if (!Number.isFinite(selectedDepositPrice) || selectedDepositPrice <= 0) {
+    return setToast('Live conversion price is unavailable. Please try again later.');
+  }
+
+  // Calculate crypto amount from USD
+  const cryptoAmount = n / selectedDepositPrice;
+
+  if (!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) {
+    return setToast('Unable to calculate the crypto amount.');
+  }
+
+  if (!selectedAsset.wallet_address) {
+    return setToast('Deposit address is not configured yet.');
+  }
+
   try {
     let proofPath = null;
 
@@ -4663,15 +4827,17 @@ if (depositMethod === 'TRC20' && n < 50) {
     const { data, error } = await supabase
       .from('deposit_requests')
       .insert({
-  user_id: userId,
-  amount: n,
-  method: depositMethod,
-  network: depositMethod,
-  currency: depositMethod === 'TRC20' ? 'USDT' : depositMethod,
-  proof_url: proofPath,
-  proof_path: proofPath,
-  status: 'Pending'
-})
+        user_id: userId,
+        amount: cryptoAmount,
+        admin_credit_amount: cryptoAmount,
+        payment_amount_usd: n,
+        method: network,
+        network: network,
+        currency: currency,
+        proof_url: proofPath,
+        proof_path: proofPath,
+        status: 'Pending'
+      })
       .select()
       .single();
 
@@ -4682,8 +4848,12 @@ if (depositMethod === 'TRC20' && n < 50) {
         id: data.id,
         type: 'Deposit',
         method: data.method,
-        currency,
+        currency: currency,
         amount: Number(data.amount),
+        paymentAmountUsd: Number(data.payment_amount_usd || n),
+        adminCreditAmount: Number(
+          data.admin_credit_amount ?? cryptoAmount
+        ),
         status: data.status,
         created: data.created_at,
         proof_path: data.proof_path || data.proof_url
@@ -4696,7 +4866,10 @@ if (depositMethod === 'TRC20' && n < 50) {
     setDepositAmount('');
 
     const receiptInput = document.getElementById('receipt');
-    if (receiptInput) receiptInput.value = '';
+
+    if (receiptInput) {
+      receiptInput.value = '';
+    }
 
   } catch (error) {
     console.error('Deposit submission failed:', error);
@@ -4713,14 +4886,6 @@ const withdrawAvailableBalance =
     : withdrawCurrency === 'BTC'
       ? Number(btcBalance || 0)
       : Number(ethBalance || 0);
-  console.log('WITHDRAW DEBUG:', {
-  withdrawMethod,
-  withdrawCurrency,
-  btcBalance,
-  ethBalance,
-  balance,
-  withdrawAvailableBalance
-});
 const submitWithdraw = async (e) => {
   e.preventDefault();
 
@@ -4790,8 +4955,6 @@ const submitWithdraw = async (e) => {
   setToast('Withdrawal request submitted');
   setWithdrawAddress('');
   setWithdrawAmount('');
-
-  console.log('SUPABASE WITHDRAW INSERT SUCCESS:', data);
 };
 
 
@@ -4856,6 +5019,7 @@ const submitWithdraw = async (e) => {
 
   } catch (error) {
     console.error('Funding request review failed:', error);
+    console.error('WITHDRAWAL APPROVAL ERROR DETAILS:', error);
     setToast('Approval failed: ' + error.message);
   }
 };
@@ -4865,8 +5029,89 @@ const submitWithdraw = async (e) => {
     catch { setToast('Copy not available in this browser.') }
   }
 
+const selectedDepositAsset = depositAssets.find(
+  item => String(item.id) === String(selectedDepositAssetId)
+);
+
+const selectedDepositPrice = (() => {
+  const symbol = String(
+    selectedDepositAsset?.currency || ''
+  ).toUpperCase();
+
+  if (!symbol) return 0;
+
+  const binanceMarket = cryptoMarkets.find(
+    market =>
+      String(market.symbol).toUpperCase() === symbol &&
+      Number(market.price) > 0
+  );
+
+  if (binanceMarket) {
+    return Number(binanceMarket.price);
+  }
+
+  const coinGeckoMarket = cryptoRanking.find(
+    market =>
+      String(market.symbol).toUpperCase() === symbol &&
+      Number(market.current_price) > 0
+  );
+
+  if (coinGeckoMarket) {
+    return Number(coinGeckoMarket.current_price);
+  }
+
+  return 0;
+})();
+
+const estimatedDepositCrypto =
+  selectedDepositPrice > 0 && Number(depositAmount) > 0
+    ? Number(depositAmount) / selectedDepositPrice
+    : 0;
+const supportedDepositCoins = [
+  { symbol: 'BTC', name: 'Bitcoin', logo: 'btc', fallback: '₿' },
+  { symbol: 'ETH', name: 'Ethereum', logo: 'eth', fallback: 'Ξ' },
+  { symbol: 'USDT', name: 'Tether', logo: 'usdt', fallback: '₮' },
+  { symbol: 'BNB', name: 'BNB', logo: 'bnb', fallback: '◆' },
+  { symbol: 'USDC', name: 'USD Coin', logo: 'usdc', fallback: '$' },
+  { symbol: 'XRP', name: 'XRP', logo: 'xrp', fallback: '✕' },
+  { symbol: 'SOL', name: 'Solana', logo: 'sol', fallback: '◎' },
+  { symbol: 'TRX', name: 'TRON', logo: 'trx', fallback: '◆' },
+  { symbol: 'HYPE', name: 'Hyperliquid', logo: 'hype', fallback: 'H' },
+  { symbol: 'ZEC', name: 'Zcash', logo: 'zec', fallback: 'ⓩ' },
+  { symbol: 'DOGE', name: 'Dogecoin', logo: 'doge', fallback: 'Ð' },
+  { symbol: 'XMR', name: 'Monero', logo: 'xmr', fallback: 'ɱ' },
+  { symbol: 'USDS', name: 'USDS', logo: 'usds', fallback: '$' },
+  { symbol: 'WBT', name: 'WhiteBIT Coin', logo: 'wbt', fallback: 'W' },
+  { symbol: 'WBTC', name: 'Wrapped Bitcoin', logo: 'wbtc', fallback: '₿' },
+  { symbol: 'WBETH', name: 'Wrapped Beacon ETH', logo: 'wbeth', fallback: 'Ξ' },
+  { symbol: 'XLM', name: 'Stellar', logo: 'xlm', fallback: '*' },
+  { symbol: 'LINK', name: 'Chainlink', logo: 'link', fallback: '⬡' },
+  { symbol: 'ADA', name: 'Cardano', logo: 'ada', fallback: '₳' },
+  { symbol: 'USDE', name: 'Ethena USDe', logo: 'usde', fallback: '$' },
+  { symbol: 'UNI', name: 'Uniswap', logo: 'uni', fallback: 'U' },
+  { symbol: 'DAI', name: 'Dai', logo: 'dai', fallback: '◈' },
+  { symbol: 'NEAR', name: 'NEAR Protocol', logo: 'near', fallback: 'N' },
+  { symbol: 'BCH', name: 'Bitcoin Cash', logo: 'bch', fallback: '₿' },
+  { symbol: 'LTC', name: 'Litecoin', logo: 'ltc', fallback: 'Ł' },
+  { symbol: 'AVAX', name: 'Avalanche', logo: 'avax', fallback: '▲' },
+  { symbol: 'SUI', name: 'Sui', logo: 'sui', fallback: 'S' },
+  { symbol: 'GRAM', name: 'Gram', logo: 'gram', fallback: 'G' },
+  { symbol: 'RLUSD', name: 'Ripple USD', logo: 'rlusd', fallback: '$' },
+  { symbol: 'XAUT', name: 'Tether Gold', logo: 'xaut', fallback: 'Au' }
+];
+
+const depositCurrencies = supportedDepositCoins.filter(coin =>
+  depositAssets.some(
+    item => item.currency?.toUpperCase() === coin.symbol
+  )
+);
+
+const selectedCurrencyNetworks = depositAssets.filter(
+  item => item.currency?.toUpperCase() === selectedDepositCurrency
+);
+
   if (isAdminRoute && (!authSession || !isAdmin)) {
-    return <div className="app-shell admin-login-shell"><main className="main-content" style={{ maxWidth: 560, margin: '10vh auto', padding: 24 }}><div className="panel form-panel"><Logo /><h1>Restricted access</h1><p className="muted">This address is not linked from the public website. Sign in with an account whose Supabase profile role is admin.</p>{!isSupabaseConfigured && <div className="notice"><strong>Supabase setup required</strong><p>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local and run the SQL schema. Then promote your owner account to role admin in Supabase SQL Editor.</p></div>}</div></main>{loginOpen && <div className="modal-backdrop"><div className="modal panel"><Logo /><h2>Admin sign in</h2><p className="muted">Use the dedicated owner email/phone and password.</p><form onSubmit={handleAuthSubmit}><label className="field-label">Email or phone</label><input className="text-input" value={authIdentifier} onChange={e => setAuthIdentifier(e.target.value)} required /><label className="field-label">{t('Password')}</label><input className="text-input" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required /><button className="btn btn-gold btn-full" type="submit" disabled={authBusy}>{authBusy ? 'Please wait…' : 'Admin sign in'}</button></form></div></div>}{toast && <div className="toast">{toast}<button onClick={() => setToast('')}>×</button></div>}</div>
+    return <div className="app-shell admin-login-shell"><main className="main-content" style={{ maxWidth: 560, margin: '10vh auto', padding: 24 }}><div className="panel form-panel"><Logo />{!isSupabaseConfigured && <div className="notice"></div>}</div></main>{loginOpen && <div className="modal-backdrop"><div className="modal panel"><Logo /><form onSubmit={handleAuthSubmit}><label className="field-label">Email or phone</label><input className="text-input" value={authIdentifier} onChange={e => setAuthIdentifier(e.target.value)} required /><label className="field-label">{t('Password')}</label><input className="text-input" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required /><button className="btn btn-gold btn-full" type="submit" disabled={authBusy}>{authBusy ? 'Please wait…' : 'Admin sign in'}</button></form></div></div>}{toast && <div className="toast">{toast}<button onClick={() => setToast('')}>×</button></div>}</div>
   }
 
   if (isAdminRoute && authSession && isAdmin) {
@@ -5702,108 +5947,1057 @@ onTimeframeChange={setChartTimeframe}
 >{tradeStarting ? 'Saving trade...' : !tradeEnabled ? 'Trading' : trade && !trade.done ? `Trade running · ${remaining}s` : 'Start trade'} <span>↗</span></button><p className="fine-print">IG trading platforms</p></div></div>
         </section>}
 
-        {page === 'Deposit' && <section className="page-section narrow-page"><div className="eyebrow"></div><h1>Deposit <span className="gold-text">request</span></h1><p className="muted"></p><div className="panel form-panel"><form onSubmit={submitDeposit}><label className="field-label">Select network</label><div className="network-options">{['TRC20', 'BTC', 'ETH'].map(n => <button type="button" key={n} className={depositMethod === n ? 'network-active' : ''} onClick={() => setDepositMethod(n)}><span className="network-symbol">{n === 'TRC20' ? '₮' : n === 'BTC' ? '₿' : '◆'}</span><strong>{n}</strong><small>{n === 'TRC20' ? 'USDT · Tron' : n === 'BTC' ? 'Bitcoin' : 'Ethereum'}</small></button>)}</div><label className="field-label">Deposit address</label>
+        {page === 'Deposit' && (
+  <section className="page-section narrow-page deposit-page">
 
-          <div className="copy-field">
+    {depositMode === 'home' && (
+      <>
+        <div className="eyebrow">IG TRADE WALLET</div>
+        <h1>Deposit <span className="gold-text">Assets</span></h1>
+        <p className="muted">
+          Choose how you want to add funds to your account
+        </p>
+
+        <div className="deposit-home-grid">
+
+          <button
+            type="button"
+            className="panel deposit-option-card"
+            onClick={() => {
+              setDepositCoinStep('select');
+              setDepositMode('crypto');
+              if (depositAssets.length > 0 && !selectedDepositAssetId) {
+                setSelectedDepositCurrency(depositAssets[0].currency);
+                setSelectedDepositAssetId(String(depositAssets[0].id));
+                setDepositMethod(depositAssets[0].network);
+              }
+            }}
+          >
+            <span className="deposit-option-icon crypto-option-icon">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M9 3v18M15 3v18M6 7h10a3 3 0 0 1 0 6H8h8a3 3 0 0 1 0 6H6" />
+  </svg>
+</span>
+            <strong>Deposit Assets XUA/USD Gold</strong>
+            <small>Deposit crypto from an external wallet</small>
+            <span className="deposit-option-arrow">→</span>
+          </button>
+
+          <button
+            type="button"
+            className="panel deposit-option-card"
+            onClick={() => setDepositMode('buy')}
+          >
+            <span className="deposit-option-icon buy-option-icon">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="3" y="5" width="18" height="14" rx="3" />
+    <path d="M3 10h18M7 15h4" />
+  </svg>
+</span>
+            <strong>Buy Gold </strong>
+            <small>Buy gold Index using supported payment methods</small>
+            <span className="deposit-option-arrow">→</span>
+          </button>
+
+          <button
+            type="button"
+            className="panel deposit-option-card"
+            onClick={() => setDepositMode('fiat')}
+          >
+            <span className="deposit-option-icon fiat-option-icon">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-7h6v7M8 10h.01M16 10h.01" />
+  </svg>
+</span>
+            <strong>Deposit Fiat</strong>
+            <small>Add funds using traditional currency</small>
+            <span className="deposit-option-arrow">→</span>
+          </button>
+
+        </div>
+      </>
+    )}
+
+    
+{depositMode === 'buy' && (
+  <div className="panel form-panel buy-crypto-panel">
+
+    <button
+      type="button"
+      className="btn btn-outline"
+      onClick={() => setDepositMode('home')}
+    >
+      ← Back
+    </button>
+
+    <div className="eyebrow"></div>
+    <h2>Buy <span className="gold-text">Gold/Forex</span></h2>
+
+{buyCryptoStep === 'select' && (
+  <>
+    <label className="field-label">Select Coin</label>
+
+    <div className="buy-coin-search">
+      <span>⌕</span>
+      <input
+        type="text"
+        value={buyCryptoSearch}
+        onChange={e => setBuyCryptoSearch(e.target.value)}
+        placeholder="Search cryptocurrency..."
+      />
+
+      {buyCryptoSearch && (
+        <button
+          type="button"
+          onClick={() => setBuyCryptoSearch('')}
+        >
+          ×
+        </button>
+      )}
+    </div>
+
+    <div className="buy-coin-grid">
+      {supportedDepositCoins
+        .filter(coin =>
+          coin.symbol.toLowerCase().includes(buyCryptoSearch.trim().toLowerCase()) ||
+          coin.name.toLowerCase().includes(buyCryptoSearch.trim().toLowerCase())
+        )
+        .map(coin => (
+          <button
+            type="button"
+            key={coin.symbol}
+            className="buy-coin-btn"
+            onClick={() => {
+              setBuyCryptoCoin(coin.symbol);
+              setBuyCryptoSearch('');
+              setBuyCryptoStep('details');
+            }}
+          >
+            <img
+              src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${coin.logo}.png`}
+              alt={`${coin.name} logo`}
+              onError={e => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src =
+                  'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/generic.png';
+              }}
+            />
+
             <span>
-              {walletAddresses[depositMethod] ||
-                `Admin has not configured the ${depositMethod} address yet`}
+              <strong>{coin.symbol}</strong>
+              <small>{coin.name}</small>
             </span>
-            <button
-              type="button"
-              disabled={!walletAddresses[depositMethod]}
-              onClick={() => copy(walletAddresses[depositMethod])}
-            >
-              Copy
-            </button>
+          </button>
+        ))}
+    </div>
+
+    {supportedDepositCoins.filter(coin =>
+      coin.symbol.toLowerCase().includes(buyCryptoSearch.trim().toLowerCase()) ||
+      coin.name.toLowerCase().includes(buyCryptoSearch.trim().toLowerCase())
+    ).length === 0 && (
+      <p className="muted">No coin found</p>
+    )}
+  </>
+)}
+
+{buyCryptoStep === 'details' && (
+  <div className="buy-selected-coin-card">
+    <div className="buy-selected-coin-heading">
+      <span className="field-label">Selected Coin</span>
+
+      <button
+        type="button"
+        className="btn btn-outline"
+        onClick={() => {
+          setBuyCryptoStep('select');
+          setBuyCryptoSearch('');
+        }}
+      >
+        ← Change Coin
+      </button>
+    </div>
+
+    {supportedDepositCoins
+      .filter(coin => coin.symbol === buyCryptoCoin)
+      .map(coin => (
+        <div className="buy-selected-coin-info" key={coin.symbol}>
+          <img
+            src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${coin.logo}.png`}
+            alt={`${coin.name} logo`}
+            onError={e => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src =
+                'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/generic.png';
+            }}
+          />
+
+          <div>
+            <strong>{coin.symbol}</strong>
+            <small>{coin.name}</small>
           </div>
-          {walletQrCodes[depositMethod] && (
-  <div className="deposit-qr-display">
-    <label className="field-label">Scan to deposit</label>
-    <img
-      src={walletQrCodes[depositMethod]}
-      alt={`${depositMethod} deposit QR code`}
-      style={{
-        display: 'block',
-        width: 'min(240px, 100%)',
-        maxHeight: 240,
-        objectFit: 'contain',
-        margin: '12px auto 20px',
-        padding: 12,
-        background: '#fff',
-        borderRadius: 12
-      }}
-    />
+        </div>
+      ))}
   </div>
 )}
-         
+    <label className="field-label">You Pay</label>
+
+    <div className="buy-amount-box">
+      <span>USD $</span>
+      <input
+        type="number"
+        min="10"
+        value={buyCryptoAmount}
+        onChange={e => setBuyCryptoAmount(e.target.value)}
+        placeholder="Enter amount"
+      />
+    </div>
+
+    <label className="field-label">Payment Method</label>
+
+    <div className="buy-payment-grid">
+      <button
+        type="button"
+        className={`buy-payment-btn ${
+          buyPaymentMethod === 'Card' ? 'deposit-choice-active' : ''
+        }`}
+        onClick={() => setBuyPaymentMethod('Card')}
+      >
+        <strong>▣ Card</strong>
+        <small>Credit / Debit Card</small>
+      </button>
+
+      <button
+        type="button"
+        className={`buy-payment-btn ${
+          buyPaymentMethod === 'Bank Transfer' ? 'deposit-choice-active' : ''
+        }`}
+        onClick={() => setBuyPaymentMethod('Bank Transfer')}
+      >
+        <strong>▤ Bank Transfer</strong>
+        <small>Bank payment</small>
+      </button>
+    </div>
+
+    
+<div className="buy-summary">
+
+  <div className="buy-selected-asset">
+    <span>Selected Asset</span>
+
+    <div className="buy-selected-coin">
+      <img
+        src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${
+          supportedDepositCoins.find(
+            coin => coin.symbol === buyCryptoCoin
+          )?.logo || 'generic'
+        }.png`}
+        alt={`${buyCryptoCoin} logo`}
+        onError={e => {
+          e.currentTarget.onerror = null;
+          e.currentTarget.src =
+            'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/generic.png';
+        }}
+      />
+
+      <div>
+        <strong>{buyCryptoCoin}</strong>
+        <small>
+          {supportedDepositCoins.find(
+            coin => coin.symbol === buyCryptoCoin
+          )?.name || buyCryptoCoin}
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <span>Payment Amount</span>
+    <strong>${Number(buyCryptoAmount || 0).toFixed(2)} USD</strong>
+  </div>
+
+  <div>
+    <span>Payment Method</span>
+    <strong>{buyPaymentMethod}</strong>
+  </div>
+
+  <div>
+    <span>Estimated Coin</span>
+   
+<strong>
+  {estimatedBuyCrypto !== null
+    ? `${estimatedBuyCrypto.toLocaleString('en-US', {
+        maximumFractionDigits: 8
+      })} ${buyCryptoCoin}`
+    : 'Live quote unavailable'}
+</strong>
+  </div>
+</div>
+   
+<button
+  type="button"
+  className="btn btn-gold btn-full"
+  disabled={
+    !buyCryptoAmount ||
+    Number(buyCryptoAmount) <= 0 ||
+    estimatedBuyCrypto === null
+  }
+  onClick={() => setBuyCryptoReview(true)}
+>
+  Submit
+</button>
+
+{buyCryptoReview && (
+  <div className="buy-order-review">
+    <div className="eyebrow">ORDER</div>
+    <h3>Review Your Order</h3>
+
+    <div className="buy-review-row">
+      <span>All Markets</span>
+      <strong>{buyCryptoCoin}</strong>
+    </div>
+
+    <div className="buy-review-row">
+      <span>Payment Amount</span>
+      <strong>${Number(buyCryptoAmount).toFixed(2)} USD</strong>
+    </div>
+
+    <div className="buy-review-row">
+      <span>Payment Method</span>
+      <strong>{buyPaymentMethod}</strong>
+    </div>
+
+    <div className="buy-review-row">
+      <span>Estimated Crypto</span>
+      <strong>
+        {estimatedBuyCrypto !== null
+          ? `${estimatedBuyCrypto.toLocaleString('en-US', {
+              maximumFractionDigits: 8
+            })} ${buyCryptoCoin}`
+          : 'Live quote unavailable'}
+      </strong>
+    </div>
+
+    <button
+      type="button"
+      className="btn btn-outline btn-full"
+      onClick={() => setBuyCryptoReview(false)}
+    >
+      ← Back to Edit Order
+    </button>
+  </div>
+)}
+
+  </div>
+)}
+
+
+   
+{depositMode === 'fiat' && (
+  <div className="panel form-panel fiat-deposit-panel">
+    <button
+      type="button"
+      className="btn btn-outline"
+      onClick={() => {
+        setDepositMode('home');
+        setFiatDepositReview(false);
+      }}
+    >
+      ← Back
+    </button>
+
+    <div className="eyebrow">FIAT CURRENCY</div>
+    <h2>Deposit <span className="gold-text">Fiat</span></h2>
+    <p className="muted">
+      Select your currency and payment method
+    </p>
+
+    {!fiatDepositReview ? (
+      <>
+     
+{fiatDepositStep === 'select' ? (
+  <>
+    <label className="field-label">Select Currency</label>
+
+    <div className="fiat-search-box">
+      <span>⌕</span>
+      <input
+        type="text"
+        value={fiatCurrencySearch}
+        onChange={e => setFiatCurrencySearch(e.target.value)}
+        placeholder="Search currency..."
+      />
+      {fiatCurrencySearch && (
+        <button
+          type="button"
+          onClick={() => setFiatCurrencySearch('')}
+        >
+          ×
+        </button>
+      )}
+    </div>
+
+    <div className="fiat-currency-grid">
+      {fiatCurrencies
+        .filter(currency =>
+          currency.code.toLowerCase().includes(
+            fiatCurrencySearch.trim().toLowerCase()
+          ) ||
+          currency.name.toLowerCase().includes(
+            fiatCurrencySearch.trim().toLowerCase()
+          )
+        )
+        .map(currency => (
+          <button
+            type="button"
+            key={currency.code}
+            className="fiat-choice-btn"
+            onClick={() => {
+              setFiatCurrency(currency.code);
+              setFiatCurrencySearch('');
+              setFiatDepositStep('details');
+            }}
+          >
+            <img
+              className="fiat-currency-flag"
+              src={`https://flagcdn.com/w80/${
+                currency.code === 'EUR' ? 'eu' :
+                currency.code === 'USD' ? 'us' :
+                currency.code === 'GBP' ? 'gb' :
+                currency.code === 'CAD' ? 'ca' :
+                currency.code === 'AUD' ? 'au' :
+                currency.code === 'SGD' ? 'sg' :
+                currency.code === 'CHF' ? 'ch' :
+                currency.code === 'JPY' ? 'jp' :
+                currency.code === 'CNY' ? 'cn' :
+                currency.code === 'HKD' ? 'hk' :
+                currency.code === 'INR' ? 'in' :
+                currency.code === 'BDT' ? 'bd' :
+                currency.code === 'NZD' ? 'nz' :
+                currency.code === 'SEK' ? 'se' :
+                currency.code === 'NOK' ? 'no' :
+                currency.code === 'DKK' ? 'dk' :
+                currency.code === 'PLN' ? 'pl' :
+                currency.code === 'CZK' ? 'cz' :
+                currency.code === 'HUF' ? 'hu' :
+                currency.code === 'RON' ? 'ro' :
+                currency.code === 'TRY' ? 'tr' :
+                currency.code === 'RUB' ? 'ru' :
+                currency.code === 'UAH' ? 'ua' :
+                currency.code === 'KRW' ? 'kr' :
+                currency.code === 'THB' ? 'th' :
+                currency.code === 'MYR' ? 'my' :
+                currency.code === 'IDR' ? 'id' :
+                currency.code === 'PHP' ? 'ph' :
+                currency.code === 'VND' ? 'vn' :
+                currency.code === 'PKR' ? 'pk' :
+                currency.code === 'LKR' ? 'lk' :
+                currency.code === 'NPR' ? 'np' :
+                currency.code === 'AED' ? 'ae' :
+                currency.code === 'SAR' ? 'sa' :
+                currency.code === 'QAR' ? 'qa' :
+                currency.code === 'KWD' ? 'kw' :
+                currency.code === 'BHD' ? 'bh' :
+                currency.code === 'OMR' ? 'om' :
+                currency.code === 'JOD' ? 'jo' :
+                currency.code === 'ILS' ? 'il' :
+                currency.code === 'ZAR' ? 'za' :
+                currency.code === 'NGN' ? 'ng' :
+                currency.code === 'KES' ? 'ke' :
+                currency.code === 'EGP' ? 'eg' :
+                currency.code === 'MAD' ? 'ma' :
+                currency.code === 'TND' ? 'tn' :
+                currency.code === 'BRL' ? 'br' :
+                currency.code === 'MXN' ? 'mx' :
+                currency.code === 'ARS' ? 'ar' : 'cl'
+              }.png`}
+              alt={`${currency.name} flag`}
+            />
+            <strong>{currency.code}</strong>
+            <small>{currency.name}</small>
+          </button>
+        ))}
+    </div>
+
+    {fiatCurrencies.filter(currency =>
+      currency.code.toLowerCase().includes(
+        fiatCurrencySearch.trim().toLowerCase()
+      ) ||
+      currency.name.toLowerCase().includes(
+        fiatCurrencySearch.trim().toLowerCase()
+      )
+    ).length === 0 && (
+      <p className="muted">No currency found</p>
+    )}
+  </>
+) : (
+  <div className="fiat-selected-currency">
+    <div className="fiat-selected-heading">
+      <span className="field-label">Selected Currency</span>
+      <button
+        type="button"
+        className="btn btn-outline"
+        onClick={() => {
+          setFiatDepositStep('select');
+          setFiatCurrencySearch('');
+        }}
+      >
+        ← Change Currency
+      </button>
+    </div>
+
+    {(() => {
+      const selectedFiat = fiatCurrencies.find(
+        currency => currency.code === fiatCurrency
+      );
+
+      if (!selectedFiat) return null;
+
+      return (
+        <div className="fiat-selected-info">
+          <img
+            src={`https://flagcdn.com/w80/${
+              selectedFiat.code === 'EUR' ? 'eu' :
+              selectedFiat.code === 'USD' ? 'us' :
+              selectedFiat.code === 'GBP' ? 'gb' :
+              selectedFiat.code === 'CAD' ? 'ca' :
+              selectedFiat.code === 'AUD' ? 'au' :
+              selectedFiat.code === 'SGD' ? 'sg' :
+              selectedFiat.code === 'CHF' ? 'ch' :
+              selectedFiat.code === 'JPY' ? 'jp' :
+              selectedFiat.code === 'CNY' ? 'cn' :
+              selectedFiat.code === 'HKD' ? 'hk' :
+              selectedFiat.code === 'INR' ? 'in' :
+              selectedFiat.code === 'BDT' ? 'bd' :
+              selectedFiat.code === 'NZD' ? 'nz' :
+              selectedFiat.code === 'SEK' ? 'se' :
+              selectedFiat.code === 'NOK' ? 'no' :
+              selectedFiat.code === 'DKK' ? 'dk' :
+              selectedFiat.code === 'PLN' ? 'pl' :
+              selectedFiat.code === 'CZK' ? 'cz' :
+              selectedFiat.code === 'HUF' ? 'hu' :
+              selectedFiat.code === 'RON' ? 'ro' :
+              selectedFiat.code === 'TRY' ? 'tr' :
+              selectedFiat.code === 'RUB' ? 'ru' :
+              selectedFiat.code === 'UAH' ? 'ua' :
+              selectedFiat.code === 'KRW' ? 'kr' :
+              selectedFiat.code === 'THB' ? 'th' :
+              selectedFiat.code === 'MYR' ? 'my' :
+              selectedFiat.code === 'IDR' ? 'id' :
+              selectedFiat.code === 'PHP' ? 'ph' :
+              selectedFiat.code === 'VND' ? 'vn' :
+              selectedFiat.code === 'PKR' ? 'pk' :
+              selectedFiat.code === 'LKR' ? 'lk' :
+              selectedFiat.code === 'NPR' ? 'np' :
+              selectedFiat.code === 'AED' ? 'ae' :
+              selectedFiat.code === 'SAR' ? 'sa' :
+              selectedFiat.code === 'QAR' ? 'qa' :
+              selectedFiat.code === 'KWD' ? 'kw' :
+              selectedFiat.code === 'BHD' ? 'bh' :
+              selectedFiat.code === 'OMR' ? 'om' :
+              selectedFiat.code === 'JOD' ? 'jo' :
+              selectedFiat.code === 'ILS' ? 'il' :
+              selectedFiat.code === 'ZAR' ? 'za' :
+              selectedFiat.code === 'NGN' ? 'ng' :
+              selectedFiat.code === 'KES' ? 'ke' :
+              selectedFiat.code === 'EGP' ? 'eg' :
+              selectedFiat.code === 'MAD' ? 'ma' :
+              selectedFiat.code === 'TND' ? 'tn' :
+              selectedFiat.code === 'BRL' ? 'br' :
+              selectedFiat.code === 'MXN' ? 'mx' :
+              selectedFiat.code === 'ARS' ? 'ar' : 'cl'
+            }.png`}
+            alt={`${selectedFiat.name} flag`}
+          />
+          <div>
+            <strong>{selectedFiat.code}</strong>
+            <small>{selectedFiat.name}</small>
+          </div>
+        </div>
+      );
+    })()}
+  </div>
+)}
+        <label className="field-label">Deposit Amount</label>
+        <div className="buy-amount-box">
+         <span>
+  {fiatCurrencies.find(c => c.code === fiatCurrency)?.symbol || '$'} {fiatCurrency}
+</span>
+          <input
+            type="number"
+            min="1"
+            value={fiatAmount}
+            onChange={e => setFiatAmount(e.target.value)}
+            placeholder="Enter amount"
+          />
+        </div>
+
+        <label className="field-label">Payment Method</label>
+        <div className="fiat-payment-grid">
+          {['Bank Transfer', 'Card'].map(method => (
+            <button
+              type="button"
+              key={method}
+              className={`fiat-choice-btn ${
+                fiatPaymentMethod === method ? 'deposit-choice-active' : ''
+              }`}
+              onClick={() => setFiatPaymentMethod(method)}
+            >
+              {method}
+            </button>
+          ))}
+        </div>
+
+        <div className="buy-summary">
+          <div>
+            <span>Currency</span>
+            <strong>{fiatCurrency}</strong>
+          </div>
+          <div>
+            <span>Deposit Amount</span>
+            <strong>
+              {fiatCurrency} {Number(fiatAmount || 0).toFixed(2)}
+            </strong>
+          </div>
+          <div>
+            <span>Payment Method</span>
+            <strong>{fiatPaymentMethod}</strong>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="btn btn-gold btn-full"
+          disabled={!fiatAmount || Number(fiatAmount) <= 0}
+          onClick={() => setFiatDepositReview(true)}
+        >
+          Confirm deposit
+        </button>
+      </>
+    ) : (
+      <div className="buy-order-review">
+        <div className="eyebrow">DEPOSIT REVIEW</div>
+        <h3>Review Your Deposit</h3>
+
+        <div className="buy-review-row">
+          <span>Currency</span>
+          <strong>{fiatCurrency}</strong>
+        </div>
+
+        <div className="buy-review-row">
+          <span>Deposit Amount</span>
+          <strong>
+            {fiatCurrency} {Number(fiatAmount).toFixed(2)}
+          </strong>
+        </div>
+
+        <div className="buy-review-row">
+          <span>Payment Method</span>
+          <strong>{fiatPaymentMethod}</strong>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline btn-full"
+          onClick={() => setFiatDepositReview(false)}
+        >
+          ← Back to Edit
+        </button>
+      </div>
+    )}
+  </div>
+)}
+
+
+    {depositMode === 'crypto' && (
+      <>
+        <button
+          type="button"
+          className="btn btn-outline deposit-back-btn"
+          onClick={() => setDepositMode('home')}
+        >
+          ← Back to Deposit
+        </button>
+        <h1>Deposit <span className="gold-text">Wallets</span></h1> 
+       {depositAssetsLoading ? (
+          <div className="panel">
+            Loading available deposit assets...
+          </div>
+        ) : depositCurrencies.length === 0 ? (
+          <div className="panel notice">
+          
+          </div>
+        ) : (
+          <div className="panel form-panel deposit-crypto-panel">
+          {depositCoinStep === 'select' && (
+  <>
+            <div className="deposit-coin-list">
+{depositCurrencies.map(coin => (
+  <button
+    type="button"
+    key={coin.symbol}
+    className={`deposit-coin-btn ${
+      selectedDepositCurrency === coin.symbol
+        ? 'deposit-choice-active'
+        : ''
+    }`}
+    onClick={() => {
+  setSelectedDepositCurrency(coin.symbol);
+
+  const firstNetwork = depositAssets.find(
+    item => item.currency?.toUpperCase() === coin.symbol
+  );
+
+  if (firstNetwork) {
+    setSelectedDepositAssetId(String(firstNetwork.id));
+    setDepositMethod(firstNetwork.network);
+  }
+
+  setDepositCoinStep('details');
+}}
+  >
+    <span className="deposit-coin-logo-wrap">
+      <img
+        className="deposit-coin-logo"
+        src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${coin.logo}.png`}
+        alt={`${coin.name} logo`}
+        onError={e => {
+          e.currentTarget.onerror = null;
+          e.currentTarget.src =
+            'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/generic.png';
+        }}
+      />
+    </span>
+
+    <span className="deposit-coin-info">
+      <strong>{coin.symbol}</strong>
+      <small>{coin.name}</small>
+    </span>
+  </button>
+))}
+
+            </div>
+                      </>
+        )}
+
+        {depositCoinStep === 'details' && (
+          <>
+            <div className="deposit-details-back-wrap">
+  <button
+    type="button"
+    className="btn btn-outline deposit-back-btn"
+    onClick={() => setDepositCoinStep('select')}
+  >
+    ← Back to coins
+  </button>
+</div>
+    
+{depositCurrencies
+  .filter(coin => coin.symbol === selectedDepositCurrency)
+  .map(coin => (
+    <div
+      className="deposit-selected-coin-card"
+      key={coin.symbol}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        padding: '16px 20px',
+        marginBottom: 24,
+        border: '1px solid #2698ff',
+        borderRadius: 14,
+        background: 'linear-gradient(110deg, #10264d, #111a32)',
+        boxShadow: '0 0 16px rgba(38, 152, 255, 0.16)'
+      }}
+    >
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16
+      }}>
+        <img
+          src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${coin.logo}.png`}
+          alt={`${coin.name} logo`}
+          style={{
+            width: 62,
+            height: 62,
+            objectFit: 'contain'
+          }}
+          onError={e => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src =
+              'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/generic.png';
+          }}
+        />
+
+        <div>
+          <strong style={{
+            display: 'block',
+            fontSize: 25,
+            color: '#ffffff'
+          }}>
+            {coin.symbol}
+          </strong>
+
+          <span style={{
+            display: 'block',
+            color: '#b9c9e5',
+            fontSize: 14
+          }}>
+            {coin.name}
+          </span>
+        </div>
+      </div>
+
+      <span style={{
+        background: '#0878f9',
+        color: '#ffffff',
+        padding: '9px 16px',
+        borderRadius: 30,
+        fontSize: 13,
+        fontWeight: 700,
+        whiteSpace: 'nowrap'
+      }}>
+        ✓ Selected
+      </span>
+    </div>
+  ))}
+            <label className="field-label">
+              Select network
+            </label>
+
+            <div className="deposit-network-list">
+              {selectedCurrencyNetworks.map(item => (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={`deposit-network-btn ${
+                    String(selectedDepositAssetId) === String(item.id)
+                      ? 'deposit-choice-active'
+                      : ''
+                  }`}
+                  onClick={() => {
+                    setSelectedDepositAssetId(String(item.id));
+                    setDepositMethod(item.network);
+                  }}
+                >
+                  
+{(() => {
+  const network = String(item.network || '').toUpperCase();
+
+  const networkLogo =
+    network.includes('TRC20') || network.includes('TRON') ? 'trx' :
+    network.includes('BTC') || network.includes('BITCOIN') ? 'btc' :
+    network.includes('BEP20') || network.includes('BNB') ? 'bnb' :
+    network.includes('ERC20') || network.includes('ETHEREUM') ? 'eth' :
+    network.includes('SOLANA') ? 'sol' :
+    network.includes('POLYGON') ? 'matic' :
+    network.includes('AVALANCHE') ? 'avax' :
+    network.includes('ARBITRUM') ? 'arb' :
+    network.includes('OPTIMISM') ? 'op' :
+    network.includes('XRP') || network.includes('RIPPLE') ? 'xrp' :
+    network.includes('CARDANO') ? 'ada' :
+    network.includes('LITECOIN') ? 'ltc' :
+    String(item.currency || 'btc').toLowerCase();
+
+  return (
+    <>
+      <img
+        src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${networkLogo}.png`}
+        alt={`${item.network} logo`}
+        className="deposit-network-logo"
+      />
+      <span className="deposit-network-info">
+        <strong>{item.network}</strong>
+        <small>{item.currency} network</small>
+      </span>
+    </>
+  );
+})()}
+
+                </button>
+              ))}
+            </div>
+
+            {selectedDepositAsset && (
+              <>
+                <div className="divider" />
+
+                <label className="field-label">
+                  Deposit address
+                </label>
+
+                <div className="copy-field">
+                  <span>
+                    {selectedDepositAsset.wallet_address ||
+                      'Admin has not configured this deposit address yet'}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={!selectedDepositAsset.wallet_address}
+                    onClick={() => copy(selectedDepositAsset.wallet_address)}
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                {selectedDepositAsset.qr_url && (
+                  <div className="deposit-qr-display">
+                    <label className="field-label">
+                      Scan to deposit
+                    </label>
+
+                    <img
+                      src={selectedDepositAsset.qr_url}
+                      alt={`${selectedDepositAsset.currency} deposit QR code`}
+                      style={{
+                        display: 'block',
+                        width: 'min(220px, 100%)',
+                        maxHeight: 220,
+                        objectFit: 'contain',
+                        margin: '12px auto 20px',
+                        padding: 12,
+                        background: '#fff',
+                        borderRadius: 12
+                      }}
+                    />
+                  </div>
+                )}
+
+                {selectedDepositAsset.instructions && (
+                  <div className="notice">
+                    <strong>Deposit instructions</strong>
+                    <p>{selectedDepositAsset.instructions}</p>
+                  </div>
+                )}
+
+                <form onSubmit={submitDeposit}>
+
+                
 <label className="field-label" htmlFor="deposit-amount">
-  Amount ({depositMethod === 'TRC20' ? 'USDT' : depositMethod})
-  {depositMethod === 'TRC20' ? ' · Minimum $50' : ''}
+  Amount (USD)
+  {selectedDepositAsset.currency === 'USDT' &&
+   selectedDepositAsset.network.toUpperCase().includes('TRC20')
+    ? ' · Minimum $50 USD'
+    : ''}
 </label>
 
-<div className="amount-input">
-  <span>
-    {depositMethod === 'TRC20' ? '$' : depositMethod === 'BTC' ? '₿' : 'Ξ'}
-  </span>
+<div className="amount-input deposit-compact-amount">
+  <span>$</span>
   <input
     id="deposit-amount"
     type="number"
-    min={depositMethod === 'TRC20' ? 50 : 0}
-    step="any"
+    min={
+      selectedDepositAsset.currency === 'USDT' &&
+      selectedDepositAsset.network.toUpperCase().includes('TRC20')
+        ? 50
+        : 0.01
+    }
+    step="0.01"
+    placeholder="Enter USD amount"
     value={depositAmount}
     onChange={e => setDepositAmount(e.target.value)}
     required
   />
 </div>
 
-          <label className="field-label" htmlFor="receipt">
-            Payment screenshot
-          </label>
-          <label className="upload-box" htmlFor="receipt">
-            <span className="upload-icon">↑</span>
-            <strong>
-              {depositFile ? depositFile.name : 'Choose screenshot from your device'}
-            </strong>
-            <small>PNG, JPG or WEBP · Max 5 MB</small>
-            <input
-              id="receipt"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (!file) {
-                  setDepositFile(null);
-                  return;
-                }
+<div className="notice deposit-compact-estimate">
+  <strong>Estimated crypto amount</strong>
 
-                const reader = new FileReader();
-                reader.onload = () => {
-                  setDepositFile({
-                    name: file.name,
-                    file,
-                    previewUrl: String(reader.result || '')
-                  });
-                };
-                reader.readAsDataURL(file);
-              }}
-              
-            />
-          </label>
+  {estimatedDepositCrypto > 0 ? (
+    <p>
+      {estimatedDepositCrypto.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+      })}{' '}
+      {selectedDepositAsset.currency}
+    </p>
+  ) : (
+    <p>
+      {selectedDepositPrice > 0
+        ? 'Enter USD amount to see conversion'
+        : 'Live conversion price is currently unavailable'}
+    </p>
+  )}
 
-          <button className="btn btn-gold btn-full btn-large" type="submit">
-            Submit deposit request ↗
-          </button>
-        </form>
-        </div>
+  <small>
+    Live price: {selectedDepositPrice > 0
+      ? `$${selectedDepositPrice.toLocaleString('en-US', {
+          maximumFractionDigits: 8
+        })}`
+      : 'Unavailable'}
+  </small>
+</div>
+                  <label className="field-label" htmlFor="receipt">
+                    Payment screenshot
+                  </label>
 
-          <div className="notice">
-            <strong>Important</strong>
-            <p>
-              Please review all information carefully before submitting
-            </p>
+                  <label className="upload-box deposit-compact-upload" htmlFor="receipt">
+                    <span className="upload-icon">↑</span>
+
+                    <strong>
+                      {depositFile
+                        ? depositFile.name
+                        : 'Choose screenshot from your device'}
+                    </strong>
+
+                    <small>PNG, JPG or WEBP · Max 5 MB</small>
+
+                    <input
+                      id="receipt"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+
+                        if (!file) {
+                          setDepositFile(null);
+                          return;
+                        }
+
+                        if (file.size > 5 * 1024 * 1024) {
+                          setToast('Screenshot must be under 5 MB.');
+                          e.target.value = '';
+                          setDepositFile(null);
+                          return;
+                        }
+
+                        const reader = new FileReader();
+
+                        reader.onload = () => {
+                          setDepositFile({
+                            name: file.name,
+                            file,
+                            previewUrl: String(reader.result || '')
+                          });
+                        };
+
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    className="btn btn-gold btn-full deposit-compact-submit"
+                    type="submit"
+                    disabled={!selectedDepositAsset.wallet_address}
+                  >
+                    Confirm ↗
+                  </button>
+
+                               </form>
+              </>
+            )}
+          </>
+        )}
           </div>
-        </section>}
+        )}
+      </>
+    )}
+
+  </section>
+)}
+
          
 {page === 'Dashboard' && (
   <section className="page-section">
@@ -6059,7 +7253,6 @@ const [selectedFearGreed, setSelectedFearGreed] = [null, () => {}];
   );
 
   setSelectedFearGreed(chartData[safeIndex]);
-  console.log('Fear Greed Hover:', chartData[safeIndex]);
 }}
 
 onPointerDown={event => {
@@ -6075,7 +7268,6 @@ onPointerDown={event => {
   );
 
   setSelectedFearGreed(chartData[safeIndex]);
-  console.log('Fear Greed Hover:', chartData[safeIndex]);
 }}
 style={{ touchAction: 'pan-y', cursor: 'crosshair' }}
         >
@@ -6963,7 +8155,7 @@ style={{ touchAction: 'pan-y', cursor: 'crosshair' }}
         className="btn btn-gold"
         onClick={() => setPage('Deposit')}
       >
-        Deposit Crypto
+        Deposit
       </button>
     </div>
   </section>
@@ -6978,7 +8170,6 @@ style={{ touchAction: 'pan-y', cursor: 'crosshair' }}
             <div className="panel form-panel">
               <form
                 onSubmit={(e) => {
-                  console.log('WITHDRAW FORM SUBMITTED');
                   submitWithdraw(e);
                 }}
               >
@@ -7078,7 +8269,7 @@ style={{ touchAction: 'pan-y', cursor: 'crosshair' }}
               </form>
             </div>
 
-            <div className="notice">
+            <div className="notice deposit-compact-notice">
               <strong>IG</strong>
               <p>
                 Please ensure that your address is entered
@@ -8828,6 +10019,7 @@ setTelegramUrl={setTelegramUrl}
         </main>
       </div>
     </div>
+      
 }
 
 export default App;

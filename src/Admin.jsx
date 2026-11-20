@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Monitoring from './Monitoring.jsx';
 import './Admin.css';
 
@@ -35,6 +35,69 @@ export default function AdminPanel({
   const [rejectionNotes, setRejectionNotes] = useState({});
   const [advancedRejectionNotes, setAdvancedRejectionNotes] = useState({});
 
+  const goTo = (page) => {
+    setActivePage(page);
+    setSearch('');
+    setRequestFilter('All');
+  };
+
+  // Deposit asset management
+const [depositAssets, setDepositAssets] = useState([]);
+const [depositLoading, setDepositLoading] = useState(false);
+const [depositSaving, setDepositSaving] = useState(false);
+const [editingDepositId, setEditingDepositId] = useState(null);
+const [assetCurrency, setAssetCurrency] = useState('');
+const [assetNetwork, setAssetNetwork] = useState('');
+const [assetAddress, setAssetAddress] = useState('');
+const [assetInstructions, setAssetInstructions] = useState('');
+const [assetQrFile, setAssetQrFile] = useState(null);
+const loadDepositAssets = async () => {
+  if (!supabase) return;
+
+  setDepositLoading(true);
+
+  try {
+    const { data, error } = await supabase
+      .from('deposit_addresses')
+      .select('*')
+      .order('currency', { ascending: true });
+
+    if (error) throw error;
+
+    const assets = (data || []).map(item => {
+      let qrUrl = '';
+
+      if (item.qr_path) {
+        if (item.qr_path.startsWith('http')) {
+          qrUrl = item.qr_path;
+        } else {
+          const { data: publicData } = supabase.storage
+            .from('deposit-qr-codes')
+            .getPublicUrl(item.qr_path);
+
+          qrUrl = publicData?.publicUrl || '';
+        }
+      }
+
+      return {
+        ...item,
+        qr_url: qrUrl
+      };
+    });
+
+    setDepositAssets(assets);
+
+  } catch (error) {
+    console.error('Deposit assets loading failed:', error);
+    setToast(`Deposit loading failed: ${error.message}`);
+  } finally {
+    setDepositLoading(false);
+  }
+};
+
+useEffect(() => {
+  loadDepositAssets();
+}, [supabase]);
   const navItems = [
     { name: 'Overview', icon: '⌂' },
     { name: 'Requests', icon: '▤' },
@@ -87,11 +150,144 @@ export default function AdminPanel({
 
   if (!adminOpen) return null;
 
-  const goTo = (page) => {
-    setActivePage(page);
-    setSearch('');
-    setRequestFilter('All');
-  };
+ const resetDepositForm = () => {
+  setEditingDepositId(null);
+  setAssetCurrency('');
+  setAssetNetwork('');
+  setAssetAddress('');
+  setAssetInstructions('');
+  setAssetQrFile(null);
+};
+
+const editDepositAsset = (asset) => {
+  setEditingDepositId(asset.id);
+  setAssetCurrency(asset.currency || '');
+  setAssetNetwork(asset.network || '');
+  setAssetAddress(asset.wallet_address || '');
+  setAssetInstructions(asset.instructions || '');
+  setAssetQrFile(null);
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+};
+
+const saveDepositAsset = async (e) => {
+  e.preventDefault();
+
+  if (!supabase) {
+    setToast('Database connection unavailable.');
+    return;
+  }
+
+  const currency = assetCurrency.trim().toUpperCase();
+  const network = assetNetwork.trim();
+  const address = assetAddress.trim();
+
+  if (!currency || !network || !address) {
+    setToast('Please enter coin, network and wallet address.');
+    return;
+  }
+
+  setDepositSaving(true);
+
+  try {
+    let qrPath = null;
+
+    if (assetQrFile) {
+      if (!assetQrFile.type.startsWith('image/')) {
+        throw new Error('Please select a valid QR image.');
+      }
+
+      if (assetQrFile.size > 5 * 1024 * 1024) {
+        throw new Error('QR image must be under 5 MB.');
+      }
+
+      const extension =
+        assetQrFile.name.split('.').pop()?.toLowerCase() || 'png';
+
+      qrPath = `wallet-qr/${currency}-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('deposit-qr-codes')
+        .upload(qrPath, assetQrFile, {
+          contentType: assetQrFile.type,
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+    }
+
+    const updateValues = {
+      currency,
+      network,
+      wallet_address: address,
+      instructions: assetInstructions.trim(),
+      is_active: true
+    };
+
+    if (qrPath) {
+      updateValues.qr_path = qrPath;
+    }
+
+    if (editingDepositId) {
+      const { error } = await supabase
+        .from('deposit_addresses')
+        .update(updateValues)
+        .eq('id', editingDepositId);
+
+      if (error) throw error;
+
+    } else {
+      const { error } = await supabase
+        .from('deposit_addresses')
+        .insert(updateValues);
+
+      if (error) throw error;
+    }
+
+    await loadDepositAssets();
+
+    resetDepositForm();
+
+    setToast(
+      editingDepositId
+        ? 'Deposit asset updated successfully.'
+        : 'New deposit asset added successfully.'
+    );
+
+  } catch (error) {
+    console.error('Deposit asset save failed:', error);
+    setToast(`Save failed: ${error.message}`);
+  } finally {
+    setDepositSaving(false);
+  }
+};
+
+const toggleDepositAsset = async (asset) => {
+  try {
+    const { error } = await supabase
+      .from('deposit_addresses')
+      .update({
+        is_active: !asset.is_active
+      })
+      .eq('id', asset.id);
+
+    if (error) throw error;
+
+    await loadDepositAssets();
+
+    setToast(
+      asset.is_active
+        ? `${asset.currency} deposit disabled.`
+        : `${asset.currency} deposit enabled.`
+    );
+
+  } catch (error) {
+    setToast(`Status update failed: ${error.message}`);
+  }
+};
 
   const renderRequest = (r) => (
     <div className="request-card" key={r.id}>
@@ -103,9 +299,27 @@ export default function AdminPanel({
       </div>
 
       <div className="request-amount">
-        {money(r.amount)}
-        <small>Virtual demo value</small>
+  {r.type === 'Deposit' && Number(r.paymentAmountUsd) > 0 ? (
+    <>
+      {money(r.paymentAmountUsd)}
+      <small>Payment amount (USD)</small>
+
+      <div style={{ marginTop: 6, fontSize: 13 }}>
+        Estimated credit:{" "}
+        {Number(r.adminCreditAmount ?? r.amount).toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 8
+        })}{" "}
+        {r.currency || ''}
       </div>
+    </>
+  ) : (
+    <>
+      {money(r.amount)}
+      <small>Virtual demo value</small>
+    </>
+  )}
+</div>
 
       <div className="request-detail">
         <small>Member</small>
@@ -325,7 +539,208 @@ export default function AdminPanel({
             <p>Manage platform activities and demo records</p>
           </div>
         </div>
+<div className="deposit-admin-manager">
 
+  <div className="admin-card-heading">
+    <h3>Deposit Asset Management</h3>
+    <span className="admin-demo-label">Wallet Settings</span>
+  </div>
+
+  <p className="admin-help">
+    Add cryptocurrency, network, deposit wallet address and QR code.
+    Only active assets will appear on the user deposit page.
+  </p>
+
+  <form onSubmit={saveDepositAsset}>
+
+    <label className="field-label">
+      Coin Symbol
+    </label>
+
+    <input
+      className="text-input"
+      value={assetCurrency}
+      onChange={e => setAssetCurrency(e.target.value)}
+      placeholder="Example: USDT, BTC, ETH, BNB, SOL"
+      required
+    />
+
+    <label className="field-label">
+      Network
+    </label>
+
+    <input
+      className="text-input"
+      value={assetNetwork}
+      onChange={e => setAssetNetwork(e.target.value)}
+      placeholder="Example: TRC20, ERC20, BEP20, Solana"
+      required
+    />
+
+    <label className="field-label">
+      Deposit Wallet Address
+    </label>
+
+    <textarea
+      className="text-input"
+      rows={3}
+      value={assetAddress}
+      onChange={e => setAssetAddress(e.target.value)}
+      placeholder="Enter the correct wallet address"
+      required
+    />
+
+    <label className="field-label">
+      Deposit Instructions
+    </label>
+
+    <textarea
+      className="text-input"
+      rows={3}
+      value={assetInstructions}
+      onChange={e => setAssetInstructions(e.target.value)}
+      placeholder="Example: Only send USDT through TRC20 network"
+    />
+
+    <label className="field-label">
+      QR Code Image
+    </label>
+
+    <input
+      className="text-input"
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      onChange={e => setAssetQrFile(e.target.files?.[0] || null)}
+    />
+
+    {assetQrFile && (
+      <p className="admin-help">
+        Selected: {assetQrFile.name}
+      </p>
+    )}
+
+    <div className="request-actions">
+
+      <button
+        type="submit"
+        className="btn btn-small btn-gold"
+        disabled={depositSaving}
+      >
+        {depositSaving
+          ? 'Saving...'
+          : editingDepositId
+            ? 'Update Asset'
+            : '+ Add Deposit Asset'}
+      </button>
+
+      {editingDepositId && (
+        <button
+          type="button"
+          className="btn btn-small btn-outline"
+          onClick={resetDepositForm}
+        >
+          Cancel Edit
+        </button>
+      )}
+
+    </div>
+
+  </form>
+
+  <div className="deposit-admin-list">
+
+    <div className="admin-card-heading">
+      <h3>Configured Coins & Networks</h3>
+      <button
+        type="button"
+        onClick={loadDepositAssets}
+      >
+        Refresh
+      </button>
+    </div>
+
+    {depositLoading ? (
+      <div className="empty-state">
+        Loading deposit assets...
+      </div>
+    ) : depositAssets.length === 0 ? (
+      <div className="empty-state">
+        No deposit assets configured yet.
+      </div>
+    ) : (
+      depositAssets.map(asset => (
+        <div
+          className="deposit-admin-item"
+          key={asset.id}
+        >
+
+          <div className="deposit-admin-item-info">
+
+            <strong>
+              {asset.currency}
+            </strong>
+
+            <small>
+              {asset.network}
+            </small>
+
+            <p>
+              {asset.wallet_address}
+            </p>
+
+            <span className={`request-status ${
+              asset.is_active ? 'approved' : 'rejected'
+            }`}>
+              {asset.is_active ? 'Active' : 'Inactive'}
+            </span>
+
+            {asset.qr_url && (
+              <img
+                src={asset.qr_url}
+                alt={`${asset.currency} QR`}
+                style={{
+                  width: 90,
+                  height: 90,
+                  objectFit: 'contain',
+                  background: '#fff',
+                  padding: 5,
+                  borderRadius: 8,
+                  marginTop: 10
+                }}
+              />
+            )}
+
+          </div>
+
+          <div className="request-actions">
+
+            <button
+              type="button"
+              className="btn btn-small btn-outline"
+              onClick={() => editDepositAsset(asset)}
+            >
+              Edit
+            </button>
+
+            <button
+              type="button"
+              className={`btn btn-small ${
+                asset.is_active ? 'btn-outline' : 'btn-gold'
+              }`}
+              onClick={() => toggleDepositAsset(asset)}
+            >
+              {asset.is_active ? 'Disable' : 'Enable'}
+            </button>
+
+          </div>
+
+        </div>
+      ))
+    )}
+
+  </div>
+
+</div>
         <div className="admin-warning">
           <strong>DEMO ONLY:</strong> This dashboard uses virtual values for
           demonstration. It does not process real payments, crypto transfers,

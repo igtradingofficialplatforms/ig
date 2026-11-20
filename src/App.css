@@ -6116,3 +6116,1631 @@ video {
     transform: translate3d(0, -6px, 0);
   }
 }
+
+/* =====================================
+   IGTRADE - PREMIUM DEPOSIT PAGE
+   Existing styles preserved
+===================================== */
+
+.deposit-page {
+  width: 100%;
+  max-width: 1050px;
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+
+.deposit-page > h1 {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.deposit-home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.deposit-option-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 190px;
+  padding: 23px 20px;
+  text-align: left;
+  color: #f5f5f7;
+  cursor: pointer;
+  transition: transform .22s ease, border-color .22s ease,
+    box-shadow .22s ease;
+  overflow: hidden;
+}
+
+.deposit-option-card:hover {
+  transform: translateY(-4px);
+  border-color: #8b713e;
+  box-shadow: 0 12px 30px #0005;
+}
+
+.deposit-option-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 20px;
+  border: 1px solid #6b5831;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #d8b66d24, #d8b66d08);
+  color: #e5c77f;
+  font-size: 25px;
+  font-weight: 800;
+}
+
+.deposit-option-card > strong {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.deposit-option-card > small {
+  max-width: 230px;
+  color: #92929d;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.deposit-option-arrow {
+  position: absolute;
+  right: 19px;
+  bottom: 18px;
+  color: #d8b66d;
+  font-size: 20px;
+  transition: transform .2s ease;
+}
+
+.deposit-option-card:hover .deposit-option-arrow {
+  transform: translateX(4px);
+}
+
+.deposit-coming-soon {
+  max-width: 520px;
+  margin: 30px auto 0;
+  padding: 26px;
+  text-align: center;
+}
+
+.deposit-coming-soon > .btn {
+  display: flex;
+  width: max-content;
+  margin-bottom: 28px;
+}
+
+.deposit-coming-soon .deposit-option-icon {
+  margin: 0 auto 17px;
+}
+
+.deposit-coming-soon h2 {
+  margin: 0 0 9px;
+}
+
+.deposit-coming-soon .status-pill {
+  display: inline-block;
+  margin-top: 12px;
+}
+
+.deposit-back-btn {
+  margin-bottom: 22px;
+}
+
+.deposit-crypto-panel {
+  max-width: 100%;
+  padding: 24px;
+}
+
+.deposit-coin-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 10px;
+}
+
+.deposit-coin-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px 10px;
+  border: 1px solid #33333a;
+  border-radius: 10px;
+  background: #19191d;
+  color: #e9e9ee;
+  text-align: left;
+  transition: .2s ease;
+}
+
+.deposit-coin-btn:hover,
+.deposit-network-btn:hover {
+  border-color: #806a3d;
+  background: #211f1a;
+}
+
+.deposit-coin-btn strong {
+  font-size: 12px;
+}
+
+.deposit-coin-symbol {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  background: #30251b;
+  color: #e5c77f;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.deposit-network-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 10px;
+}
+
+.deposit-network-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #33333a;
+  border-radius: 10px;
+  background: #19191d;
+  color: #e9e9ee;
+  text-align: left;
+  transition: .2s ease;
+}
+
+.deposit-network-btn strong {
+  font-size: 12px;
+}
+
+.deposit-network-btn small {
+  color: #92929d;
+  font-size: 10px;
+}
+
+.deposit-coin-btn.deposit-choice-active,
+.deposit-network-btn.deposit-choice-active {
+  border-color: #d8b66d;
+  background: linear-gradient(145deg, #d8b66d19, #d8b66d08);
+  box-shadow: inset 0 0 0 1px #d8b66d20;
+}
+
+.deposit-coin-btn.deposit-choice-active .deposit-coin-symbol {
+  background: #d8b66d24;
+  color: #f0d48d;
+}
+
+.deposit-crypto-panel .divider {
+  height: 1px;
+  margin: 23px 0;
+  background: #29292f;
+}
+
+.deposit-crypto-panel .copy-field {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.deposit-crypto-panel .copy-field > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.deposit-qr-display {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #29292f;
+  border-radius: 12px;
+  background: #101012;
+  text-align: center;
+}
+
+.deposit-qr-display .field-label {
+  margin-top: 0;
+}
+
+.deposit-qr-display img {
+  width: min(220px, 100%);
+  height: auto;
+}
+
+.deposit-crypto-panel form {
+  margin-top: 20px;
+}
+
+.deposit-crypto-panel .notice {
+  margin-top: 20px;
+}
+
+/* Deposit page responsive layout */
+@media (max-width: 800px) {
+  .deposit-page {
+    padding-bottom: 30px;
+  }
+
+  .deposit-home-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .deposit-option-card {
+    min-height: 135px;
+    padding: 17px;
+  }
+
+  .deposit-option-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 13px;
+    font-size: 21px;
+  }
+
+  .deposit-option-card > strong {
+    font-size: 13px;
+  }
+
+  .deposit-option-card > small {
+    max-width: calc(100% - 20px);
+  }
+
+  .deposit-crypto-panel {
+    padding: 16px;
+  }
+
+  .deposit-coin-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .deposit-network-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .deposit-coming-soon {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 390px) {
+  .deposit-coin-list,
+  .deposit-network-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .deposit-crypto-panel {
+    padding: 13px;
+  }
+}
+
+.deposit-coin-logo-wrap {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #25252b;
+}
+
+.deposit-coin-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.deposit-coin-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.deposit-coin-info strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.deposit-coin-info small {
+  color: #9696a0;
+  font-size: 10px;
+}
+
+@media (max-width: 390px) {
+  .deposit-coin-logo-wrap {
+    width: 33px;
+    height: 33px;
+    flex-basis: 33px;
+  }
+}
+
+.buy-crypto-panel {
+  max-width: 680px;
+  margin: 24px auto;
+  padding: 26px;
+}
+
+.buy-crypto-panel h2 {
+  margin: 18px 0 8px;
+  font-size: 27px;
+}
+
+.buy-coin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 24px;
+}
+
+.buy-coin-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  background: #151923;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.buy-coin-btn img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.buy-coin-btn span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.buy-coin-btn strong {
+  font-size: 13px;
+}
+
+.buy-coin-btn small,
+.buy-payment-btn small {
+  color: #9696a0;
+  font-size: 10px;
+}
+
+.buy-amount-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  margin: 10px 0 22px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  background: #151923;
+}
+
+.buy-amount-box span {
+  color: #d9b66b;
+  font-weight: 700;
+}
+
+.buy-amount-box input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.buy-payment-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 22px;
+}
+
+.buy-payment-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 15px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  background: #151923;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+}
+
+.buy-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  background: #111722;
+}
+
+.buy-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.buy-summary span {
+  color: #9696a0;
+  font-size: 12px;
+}
+
+.buy-summary strong {
+  font-size: 12px;
+  text-align: right;
+}
+
+.buy-demo-notice {
+  margin-top: 18px;
+}
+
+@media (max-width: 480px) {
+  .buy-crypto-panel {
+    padding: 16px;
+  }
+
+  .buy-coin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .buy-payment-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.buy-coin-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 46px;
+  margin: 10px 0 18px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  background: #151923;
+  color: #d9b66b;
+}
+
+.buy-coin-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: white;
+  font-size: 13px;
+}
+
+.buy-coin-search button {
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.buy-selected-asset {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.buy-selected-coin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.buy-selected-coin img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #25252b;
+}
+
+.buy-selected-coin div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.buy-selected-coin strong {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.buy-selected-coin small {
+  color: #9696a0;
+  font-size: 11px;
+}
+
+.buy-selected-coin-card {
+  margin: 14px 0 24px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.buy-selected-coin-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.buy-selected-coin-info {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.buy-selected-coin-info img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.buy-selected-coin-info div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.buy-selected-coin-info strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.buy-selected-coin-info small {
+  color: #9696a0;
+  font-size: 12px;
+}
+
+.buy-selected-coin-card {
+  margin: 14px 0 24px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.buy-selected-coin-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.buy-selected-coin-info {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.buy-selected-coin-info img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.buy-selected-coin-info div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.buy-selected-coin-info strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.buy-selected-coin-info small {
+  color: #9696a0;
+  font-size: 12px;
+}
+
+.buy-selected-coin-card {
+  margin: 14px 0 24px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.buy-selected-coin-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.buy-selected-coin-info {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.buy-selected-coin-info img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.buy-selected-coin-info div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.buy-selected-coin-info strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.buy-selected-coin-info small {
+  color: #9696a0;
+  font-size: 12px;
+}
+
+.buy-order-review {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid rgba(216, 182, 109, 0.3);
+  border-radius: 14px;
+  background: rgba(216, 182, 109, 0.04);
+}
+
+.buy-order-review h3 {
+  margin: 8px 0 18px;
+}
+
+.buy-review-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.buy-review-row span {
+  color: #9696a0;
+  font-size: 13px;
+}
+
+.buy-review-row strong {
+  text-align: right;
+  font-size: 13px;
+}
+
+.fiat-currency-grid,
+.fiat-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 22px;
+}
+
+.fiat-payment-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fiat-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 105px;
+  gap: 6px;
+  padding: 14px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  cursor: pointer;
+  font-weight: 700;
+  transition: 0.2s ease;
+}
+
+.fiat-choice-btn:hover {
+  border-color: rgba(216, 182, 109, 0.6);
+}
+
+.fiat-choice-btn.deposit-choice-active {
+  border-color: #d8b66d;
+  background: rgba(216, 182, 109, 0.12);
+  color: #d8b66d;
+}
+
+.fiat-currency-flag {
+  font-size: 27px;
+  line-height: 1.2;
+}
+
+.fiat-choice-btn strong {
+  font-size: 14px;
+}
+
+.fiat-choice-btn small {
+  color: #9696a0;
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .fiat-currency-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.fiat-currency-flag {
+  width: 36px;
+  height: 25px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.fiat-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 18px;
+  padding: 0 14px;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.fiat-search-box input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+}
+
+.fiat-search-box button {
+  border: none;
+  background: transparent;
+  color: #d8b66d;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.fiat-selected-currency {
+  margin: 14px 0 24px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.fiat-selected-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.fiat-selected-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.fiat-selected-info img {
+  width: 48px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+.fiat-selected-info div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fiat-selected-info strong {
+  font-size: 16px;
+}
+
+.fiat-selected-info small {
+  color: #9696a0;
+  font-size: 12px;
+}
+/* ===== Compact Deposit Page ===== */
+
+.deposit-crypto-panel {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 18px;
+  border-radius: 16px;
+}
+
+/* Coin selection */
+.deposit-coin-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.deposit-coin-btn {
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 11px;
+}
+
+.deposit-coin-logo-wrap {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+
+.deposit-coin-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.deposit-coin-info,
+.deposit-network-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.deposit-coin-info strong,
+.deposit-network-info strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.deposit-coin-info small,
+.deposit-network-info small {
+  font-size: 10px;
+  line-height: 1.2;
+  opacity: 0.75;
+}
+
+/* Network selection */
+.deposit-network-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.deposit-network-btn {
+  min-width: 0;
+  min-height: 56px;
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.deposit-network-logo {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  object-fit: contain;
+}
+
+.deposit-network-info {
+  overflow: hidden;
+}
+
+.deposit-network-info strong,
+.deposit-network-info small {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Deposit address */
+.copy-field {
+  gap: 8px;
+}
+
+.copy-field span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.copy-field button {
+  flex: 0 0 auto;
+}
+
+/* QR code */
+.deposit-qr-display {
+  width: 100%;
+  margin: 12px auto;
+  padding: 10px;
+  text-align: center;
+  border-radius: 12px;
+}
+
+.deposit-qr-display img {
+  width: min(145px, 100%) !important;
+  max-height: 145px !important;
+  margin: 8px auto 10px !important;
+  padding: 8px !important;
+  border-radius: 10px !important;
+}
+
+/* Compact form spacing */
+.deposit-crypto-panel .field-label {
+  display: block;
+  margin: 13px 0 7px;
+  font-size: 12px;
+}
+
+.deposit-crypto-panel .divider {
+  margin: 14px 0;
+}
+
+.deposit-crypto-panel .notice {
+  padding: 11px;
+  font-size: 12px;
+}
+
+.deposit-crypto-panel .amount-input {
+  min-height: 44px;
+}
+
+.deposit-crypto-panel .upload-box {
+  min-height: 85px;
+  padding: 12px;
+}
+
+/* Small phone screens */
+@media (max-width: 480px) {
+  .deposit-crypto-panel {
+    padding: 13px;
+    border-radius: 13px;
+  }
+
+  .deposit-coin-list,
+  .deposit-network-list {
+    gap: 7px;
+  }
+
+  .deposit-coin-btn {
+    min-height: 52px;
+    padding: 7px 8px;
+    gap: 7px;
+  }
+
+  .deposit-coin-logo-wrap {
+    width: 27px;
+    height: 27px;
+    flex-basis: 27px;
+  }
+
+  .deposit-network-btn {
+    min-height: 49px;
+    padding: 7px;
+    gap: 7px;
+  }
+
+  .deposit-network-logo {
+    width: 23px;
+    height: 23px;
+    flex-basis: 23px;
+  }
+
+  .deposit-coin-info strong,
+  .deposit-network-info strong {
+    font-size: 12px;
+  }
+
+  .deposit-coin-info small,
+  .deposit-network-info small {
+    font-size: 9px;
+  }
+
+  .deposit-qr-display img {
+    width: 125px !important;
+    max-height: 125px !important;
+  }
+
+  .deposit-crypto-panel .notice {
+    padding: 9px;
+  }
+}
+
+/* Very narrow phones */
+@media (max-width: 360px) {
+  .deposit-crypto-panel {
+    padding: 10px;
+  }
+
+  .deposit-coin-btn {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .deposit-network-btn {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .deposit-network-logo {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+}
+
+/* Deposit Assets - Premium Compact Cards */
+
+.deposit-home-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+  margin: 16px auto 0;
+}
+
+.deposit-option-card {
+  position: relative;
+  width: 100%;
+  min-height: 76px;
+  padding: 13px 42px 13px 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  text-align: left;
+  border-radius: 14px;
+}
+
+.deposit-option-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.32);
+  color: #d4af37;
+}
+
+.deposit-option-icon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.deposit-option-card strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.deposit-option-card small {
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 0.72;
+}
+
+.deposit-option-arrow {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #d4af37;
+  font-size: 20px;
+}
+
+.crypto-option-icon {
+  color: #f0bd42;
+}
+
+.buy-option-icon {
+  color: #6db6ff;
+}
+
+.fiat-option-icon {
+  color: #68d3a5;
+}
+
+@media (max-width: 480px) {
+  .deposit-home-grid {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .deposit-option-card {
+    min-height: 68px;
+    padding: 10px 36px 10px 57px;
+    border-radius: 12px;
+    gap: 3px;
+  }
+
+  .deposit-option-icon {
+    left: 11px;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .deposit-option-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .deposit-option-card strong {
+    font-size: 12px;
+  }
+
+  .deposit-option-card small {
+    font-size: 10px;
+  }
+
+  .deposit-option-arrow {
+    right: 12px;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .deposit-option-card {
+    min-height: 64px;
+    padding-left: 52px;
+  }
+
+  .deposit-option-icon {
+    width: 30px;
+    height: 30px;
+    left: 9px;
+  }
+
+  .deposit-option-card strong {
+    font-size: 11px;
+  }
+
+  .deposit-option-card small {
+    font-size: 9px;
+  }
+}
+/* Compact Premium Deposit Design */
+.deposit-compact-notice {
+  padding: 10px 12px;
+  margin: 8px 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #111d30, #18263a);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+.deposit-compact-notice strong,
+.deposit-compact-estimate strong {
+  font-size: 13px;
+  color: #e2bd60;
+}
+
+.deposit-compact-notice p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.deposit-compact-amount {
+  min-height: 44px;
+  border-radius: 10px;
+}
+
+.deposit-compact-amount input {
+  font-size: 15px;
+}
+
+.deposit-compact-estimate {
+  margin-top: 8px !important;
+  padding: 12px;
+  border-radius: 10px;
+  background: #142238;
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+.deposit-compact-estimate p {
+  margin: 6px 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #e2bd60;
+  overflow-wrap: anywhere;
+}
+
+.deposit-compact-estimate small {
+  font-size: 11px;
+  color: #aab5c5;
+}
+
+.deposit-compact-upload {
+  min-height: 90px;
+  padding: 12px;
+  border-radius: 10px;
+  gap: 5px;
+}
+
+.deposit-compact-upload .upload-icon {
+  font-size: 20px;
+}
+
+.deposit-compact-upload strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.deposit-compact-upload small {
+  font-size: 10px;
+}
+
+.deposit-compact-submit {
+  min-height: 44px;
+  font-size: 13px;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 600px) {
+  .deposit-compact-notice,
+  .deposit-compact-estimate {
+    padding: 10px;
+  }
+
+  .deposit-compact-estimate p {
+    font-size: 15px;
+  }
+
+  .deposit-compact-upload {
+    min-height: 82px;
+  }
+}
+
+/* =====================================
+   MOBILE DEPOSIT CRYPTO - COMPACT DESIGN
+===================================== */
+
+@media (max-width: 600px) {
+
+  .deposit-crypto-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 14px !important;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  /* Back button */
+  .deposit-details-back-wrap {
+    width: 100%;
+    margin-bottom: 14px;
+  }
+
+  .deposit-details-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 10px;
+  }
+
+  /* Selected coin card */
+  .deposit-selected-coin-card {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px !important;
+    margin-bottom: 16px !important;
+    gap: 10px !important;
+    border-radius: 12px !important;
+    box-sizing: border-box;
+  }
+
+  .deposit-selected-coin-card img {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  .deposit-selected-coin-card strong {
+    font-size: 19px !important;
+  }
+
+  .deposit-selected-coin-card span {
+    font-size: 11px !important;
+  }
+
+  .deposit-selected-coin-card span[style*="background"] {
+    padding: 7px 9px !important;
+    font-size: 10px !important;
+  }
+
+  /* Section labels */
+  .deposit-crypto-panel .field-label {
+    display: block;
+    margin: 12px 0 8px;
+    font-size: 12px;
+  }
+
+  /* Network buttons */
+  .deposit-network-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .deposit-network-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 54px;
+    padding: 9px 11px;
+    gap: 10px;
+    border-radius: 10px;
+    box-sizing: border-box;
+  }
+
+  .deposit-network-logo {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  .deposit-network-info {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .deposit-network-info strong {
+    font-size: 12px;
+  }
+
+  .deposit-network-info small {
+    font-size: 10px;
+  }
+
+  /* Deposit address */
+  .copy-field {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .copy-field span {
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    font-size: 10px;
+  }
+
+  .copy-field button {
+    flex-shrink: 0;
+    min-height: 36px;
+    padding: 7px 11px;
+    font-size: 11px;
+  }
+
+  /* QR code */
+  .deposit-qr-display img {
+    width: 150px !important;
+    max-width: 100%;
+    max-height: 150px !important;
+  }
+
+  /* Amount */
+  .deposit-compact-amount {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .deposit-compact-amount input {
+    min-width: 0;
+    width: 100%;
+    font-size: 14px;
+  }
+
+  /* Estimate */
+  .deposit-compact-estimate {
+    padding: 11px;
+    font-size: 12px;
+  }
+
+  .deposit-compact-estimate p {
+    font-size: 14px;
+    margin: 6px 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* Screenshot upload */
+  .deposit-compact-upload {
+    width: 100%;
+    min-height: 90px;
+    padding: 12px;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .deposit-compact-upload strong {
+    display: block;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
+  .deposit-compact-upload small {
+    font-size: 10px;
+  }
+
+  /* Submit */
+  .deposit-compact-submit {
+    width: 100%;
+    min-height: 43px;
+    padding: 10px 12px;
+    font-size: 12px;
+    border-radius: 10px;
+  }
+
+  /* Prevent mobile horizontal overflow */
+  .deposit-crypto-panel *,
+  .deposit-crypto-panel *::before,
+  .deposit-crypto-panel *::after {
+    box-sizing: border-box;
+  }
+
+}
+/* MOBILE: MAKE DEPOSIT BOX SMALLER */
+@media (max-width: 600px) {
+  .deposit-crypto-panel {
+    width: calc(100% - 30px) !important;
+    max-width: 400px !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    padding: 10px !important;
+    box-sizing: border-box !important;
+  }
+}
+/* =====================================
+   DEPOSIT PAGE - PREMIUM MOBILE FIX
+===================================== */
+
+@media (max-width: 600px) {
+
+  /* Prevent horizontal overflow */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Deposit heading */
+  .deposit-page-title {
+    width: 100%;
+    max-width: 100%;
+    font-size: 29px !important;
+    line-height: 1.12 !important;
+    letter-spacing: -1px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    margin: 18px 0 10px !important;
+  }
+
+  .deposit-page-title .gold-text {
+    display: block;
+    font-size: 25px !important;
+    line-height: 1.2 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  /* Subtitle */
+  .deposit-page-subtitle {
+    max-width: 100%;
+    font-size: 12px !important;
+    line-height: 1.6 !important;
+    overflow-wrap: anywhere;
+    margin: 8px 0 16px !important;
+  }
+
+  /* Deposit main box */
+  .deposit-crypto-panel {
+    width: calc(100% - 30px) !important;
+    max-width: 400px !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    padding: 12px !important;
+    border-radius: 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Labels */
+  .deposit-crypto-panel .field-label {
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  /* Back buttons */
+  .deposit-details-back-btn,
+  .deposit-back-btn {
+    min-height: 39px !important;
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Keep all deposit content inside box */
+  .deposit-crypto-panel * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .deposit-crypto-panel img {
+    object-fit: contain;
+  }
+
+}
