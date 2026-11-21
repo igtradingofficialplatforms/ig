@@ -134,11 +134,51 @@ async function uploadDepositProof(file, userId) {
   return path
 }
 
+
+function getGoldChange(candles, hours) {
+  if (!Array.isArray(candles) || candles.length < 2) return null;
+
+  const sorted = [...candles].sort(
+    (a, b) => Number(a.time) - Number(b.time)
+  );
+
+  const toMs = (time) => {
+    const t = Number(time);
+    return t > 1e12 ? t : t * 1000;
+  };
+
+  const latest = sorted[sorted.length - 1];
+  const targetTime = toMs(latest.time) - hours * 60 * 60 * 1000;
+
+  let base = null;
+  let smallestDifference = Infinity;
+
+  for (const candle of sorted) {
+    const difference = targetTime - toMs(candle.time);
+
+    if (difference >= 0 && difference < smallestDifference) {
+      smallestDifference = difference;
+      base = candle;
+    }
+  }
+
+  if (!base || Number(base.close) <= 0 || Number(latest.close) <= 0) {
+    return null;
+  }
+
+  return (
+    (Number(latest.close) - Number(base.close)) /
+    Number(base.close)
+  ) * 100;
+}
+function getGold24hVolume(candles) {
+  return null;
+}
 const marketDefinitions = [
+  { symbol: 'XAU', pair: 'XAU/USD', name: 'Gold', kind: 'Commodity', provider: 'Twelve Data' },
   { symbol: 'BTC', pair: 'BTCUSDT', name: 'Bitcoin', kind: 'Crypto', provider: 'Binance' },
   { symbol: 'ETH', pair: 'ETHUSDT', name: 'Ethereum', kind: 'Crypto', provider: 'Binance' },
   { symbol: 'SOL', pair: 'SOLUSDT', name: 'Solana', kind: 'Crypto', provider: 'Binance' },
-  { symbol: 'XAU', pair: 'XAU/USD', name: 'Gold', kind: 'Commodity', provider: 'Twelve Data' },
   { symbol: 'AAPL', pair: 'AAPL', name: 'Apple Inc.', kind: 'Stock', provider: 'Twelve Data' },
   { symbol: 'NVDA', pair: 'NVDA', name: 'NVIDIA', kind: 'Stock', provider: 'Twelve Data' },
   { symbol: 'TSLA', pair: 'TSLA', name: 'Tesla', kind: 'Stock', provider: 'Twelve Data' },
@@ -149,7 +189,7 @@ const marketDefinitions = [
   { symbol: 'NDX', pair: 'NDX', name: 'US Tech 100', kind: 'Index', provider: 'Twelve Data' },
   { symbol: 'DAX', pair: 'DAX', name: 'Germany 40', kind: 'Index', provider: 'Twelve Data' },
   { symbol: 'DJI', pair: 'DJI', name: 'Wall Street', kind: 'Index', provider: 'Twelve Data' },
-]
+];
 // Names and order are taken from the supplied Top 200 list; prices are never taken from that snapshot.
 const requestedCryptoAssets = [
   { symbol: "BTC", name: "Bitcoin" },
@@ -804,7 +844,7 @@ const handleTouchEnd = () => {
 
               return (
                 <g
-                  key={c.time}
+                  key={`${c.time}-${i}`}
                   className={c.up ? 'candle-up' : 'candle-down'}
                   onClick={() => setSelectedCandle(c)}
                   style={{ cursor: 'pointer' }}
@@ -2034,6 +2074,9 @@ const [buyPaymentMethod, setBuyPaymentMethod] = useState('Card');
   const [withdrawMethod, setWithdrawMethod] = useState('TRC20')
   const [withdrawAddress, setWithdrawAddress] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawCoin, setWithdrawCoin] = useState('USDT');
+const [withdrawSearch, setWithdrawSearch] = useState('');
+const [withdrawStep, setWithdrawStep] = useState('coin');
   const [requests, setRequests] = useState([])
   const [advancedRequests, setAdvancedRequests] = useState([])
 const [advancedRequestsLoading, setAdvancedRequestsLoading] = useState(false)
@@ -2124,9 +2167,57 @@ const setTradeEnabled = async (value) => {
   setTradeEnabledState(nextValue)
   setToast(nextValue ? 'Trading enabled.' : 'Trading paused.')
 }
-
-
  const [toast, setToast] = useState('')
+ const [notifications, setNotifications] = useState([]);
+const [notificationOpen, setNotificationOpen] = useState(false);
+const [selectedNotification, setSelectedNotification] = useState(null);
+
+const getNotificationStyle = (notification) => {
+  const type = String(notification?.type || '').toLowerCase();
+  const title = String(notification?.title || '').toLowerCase();
+
+  let icon = '🔔';
+  let label = 'General';
+  let color = '#94a3b8';
+
+  if (type === 'login') {
+    icon = '🔐';
+    label = 'Security';
+    color = '#60a5fa';
+  } else if (type === 'deposit') {
+    icon = '💰';
+    label = 'Deposit';
+    color = '#34d399';
+  } else if (type === 'withdrawal' || type === 'withdraw') {
+    icon = '💸';
+    label = 'Withdrawal';
+    color = '#fbbf24';
+  } else if (type === 'demo_balance') {
+    icon = '📊';
+    label = 'Demo Balance';
+    color = '#a78bfa';
+  } else if (type === 'admin_notice') {
+    icon = '📢';
+    label = 'Admin Notice';
+    color = '#38bdf8';
+  }
+
+  let status = '';
+
+  if (title.includes('approved')) {
+    status = 'Approved';
+  } else if (title.includes('rejected')) {
+    status = 'Rejected';
+  } else if (title.includes('pending')) {
+    status = 'Pending';
+  }
+
+  return { icon, label, color, status };
+};
+
+const unreadNotifications = notifications.filter(
+  n => !n.is_read
+).length;
  const [tradeEnabled, setTradeEnabledState] = useState(false)
   const [loginOpen, setLoginOpen] = useState(window.location.pathname.replace(/\/+$/, '') === '/admin')
   const [authMode, setAuthMode] = useState('login')
@@ -2138,6 +2229,114 @@ const [showAuthConfirm, setShowAuthConfirm] = useState(false);
   const [authName, setAuthName] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [authSession, setAuthSession] = useState(null)
+  const loadNotifications = async () => {
+  if (!supabase || !authSession?.user?.id) {
+    setNotifications([]);
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', authSession.user.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error('Notification load error:', error);
+    return;
+  }
+
+  setNotifications(data || []);
+};
+
+
+const sendNotification = async (title, message, type = 'general') => {
+  if (!supabase || !authSession?.user?.id) return;
+
+  const { error } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: authSession.user.id,
+      title,
+      message,
+      type
+    });
+
+  if (error) {
+    console.error('Notification send error:', error);
+  }
+};
+
+
+const markNotificationRead = async (id) => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', id)
+    .eq('user_id', authSession.user.id);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setNotifications(current =>
+    current.map(n =>
+      n.id === id ? { ...n, is_read: true } : n
+    )
+  );
+};
+
+
+const markAllNotificationsRead = async () => {
+  if (!authSession?.user?.id) return;
+
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', authSession.user.id)
+    .eq('is_read', false);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setNotifications(current =>
+    current.map(n => ({ ...n, is_read: true }))
+  );
+};
+
+
+useEffect(() => {
+  if (!supabase || !authSession?.user?.id) {
+    setNotifications([]);
+    return;
+  }
+
+  loadNotifications();
+
+  const channel = supabase
+    .channel(`notifications-${authSession.user.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${authSession.user.id}`
+      },
+      () => {
+        loadNotifications();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [supabase, authSession?.user?.id]);
   useEffect(() => {
   if (!supabase || !authSession?.user?.id) {
     setMyAdvancedRequests([]);
@@ -2556,13 +2755,18 @@ const assetRates = {
 
 const fundingTotalUSDT =
   Number(balance || 0) +
-  Number(btcBalance || 0) * btcPrice +
-  Number(ethBalance || 0) * ethPrice +
-  ['SOL', 'USDC', 'EUR', 'GOLD'].reduce(
-    (total, coin) => {
-      const amount = Number(coinWallets.Funding?.[coin] || 0);
-      const rate = Number(assetRates[coin] || 0);
-      return total + amount * rate;
+  Object.entries(coinWallets?.Funding || {}).reduce(
+    (total, [coin, amount]) => {
+      if (coin === 'USDT') return total;
+
+      const rate =
+        coin === 'BTC'
+          ? btcPrice
+          : coin === 'ETH'
+            ? ethPrice
+            : Number(assetRates[coin] || 0);
+
+      return total + Number(amount || 0) * Number(rate || 0);
     },
     0
   );
@@ -4358,6 +4562,7 @@ candles = data.map(k => ({
       } else {
         // Other markets use your existing /api/market backend.
         const providerSymbols = {
+          XAU: 'XAU/USD',
           AAPL: 'AAPL',
           NVDA: 'NVDA',
           TSLA: 'TSLA',
@@ -4515,7 +4720,7 @@ useEffect(() => {
 
       const data = await response.json();
       const newPrice = Number(data?.spot_usd_oz);
-
+      console.log('XAUS Gold API data:', data);
       if (
         !Number.isFinite(newPrice) ||
         newPrice <= 0 ||
@@ -4555,26 +4760,27 @@ useEffect(() => {
         high: candleHigh,
         low: candleLow,
         close: newPrice,
-        volume: 0,
-        quoteVolume: 0,
-        trades: 0,
+        volume: null,
+quoteVolume: null,
+trades: null,
         up: newPrice >= candleOpen,
         simulated: false
       };
 
       setLivePrices(prev => ({
-        ...prev,
-        XAU: {
-          ...prev.XAU,
-          price: newPrice,
-          change: ((newPrice - sessionStart) / sessionStart) * 100,
-          sessionStartPrice: sessionStart,
-          updatedAt,
-          source: 'XAUS Live Gold API',
-          stale: false
-        }
-      }));
-
+  ...prev,
+  XAU: {
+    ...prev.XAU,
+    price: newPrice,
+    marketCap: Number(data.gold_market_cap_usd) || null,
+    supplyTonnes: Number(data.gold_supply_tonnes) || null,
+    change: ((newPrice - sessionStart) / sessionStart) * 100,
+    sessionStartPrice: sessionStart,
+    updatedAt,
+    source: 'XAUS Live Gold API',
+    stale: false
+  }
+}));
       setLiveCandles(prev => {
         const next = [...(prev.XAU || [])];
         const last = next[next.length - 1];
@@ -4587,7 +4793,7 @@ useEffect(() => {
 
         return {
           ...prev,
-          XAU: next.slice(-60)
+          XAU: next.slice(-11000)
         };
       });
 
@@ -4630,8 +4836,6 @@ useEffect(() => {
 
 // Load real XAUS historical Gold candles
 useEffect(() => {
-  if (selected !== 'XAU') return;
-
   const controller = new AbortController();
 
   const loadGoldHistory = async () => {
@@ -4642,7 +4846,7 @@ useEffect(() => {
 
       const url = new URL('https://xaus.com/api/v1/chart');
       url.searchParams.set('symbol', 'xau');
-      url.searchParams.set('range', '1d');
+      url.searchParams.set('range', '7d');
       url.searchParams.set('interval', interval);
 
       const response = await fetch(url.toString(), {
@@ -4687,16 +4891,17 @@ useEffect(() => {
 
       setLiveCandles(prev => {
         const existing = prev.XAU || [];
+        const uniqueExisting = [...new Map(existing.map(c => [c.time, c])).values()];
         const merged = new Map();
 
         historicalCandles.forEach(c => merged.set(c.time, c));
-        existing.forEach(c => merged.set(c.time, c));
+       uniqueExisting.forEach(c => merged.set(c.time, c));
 
         return {
           ...prev,
           XAU: [...merged.values()]
             .sort((a, b) => a.time - b.time)
-            .slice(-120)
+            .slice(-11000)
         };
       });
 
@@ -4717,7 +4922,7 @@ useEffect(() => {
   loadGoldHistory();
 
   return () => controller.abort();
-}, [selected, chartTimeframe]);
+}, [chartTimeframe]);
 
   const installApp = async () => {
     if (installPrompt) { installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null) }
@@ -4781,7 +4986,24 @@ const adjustMemberBalance = async (action = memberAction) => {
     setToast("Update blocked. Check Supabase RLS policies.");
     return;
   }
+const { error: noticeError } = await supabase
+  .from('notifications')
+  .insert({
+    user_id: profile.id,
+    title: action === 'add'
+      ? 'Demo Balance Added'
+      : 'Demo Balance Deducted',
 
+    message: action === 'add'
+      ? `${amount.toFixed(2)} USDT virtual demo balance has been added to your account.`
+      : `${amount.toFixed(2)} USDT virtual demo balance has been deducted from your account.`,
+
+    type: 'demo_balance'
+  });
+
+if (noticeError) {
+  console.error('Demo balance notification error:', noticeError);
+}
   setMembers(currentMembers =>
     currentMembers.map(m =>
       m.email?.toLowerCase() === email
@@ -5219,86 +5441,148 @@ const submitDeposit = async (e) => {
   }
 };
 
-const withdrawCurrency =
-  withdrawMethod === 'TRC20' ? 'USDT' : withdrawMethod;
+
+const withdrawCurrency = withdrawCoin;
 
 const withdrawAvailableBalance =
   withdrawCurrency === 'USDT'
     ? Number(balance || 0)
-    : withdrawCurrency === 'BTC'
-      ? Number(btcBalance || 0)
-      : Number(ethBalance || 0);
+    : Number(coinWallets?.Funding?.[withdrawCurrency] || 0);
+
 const submitWithdraw = async (e) => {
   e.preventDefault();
 
   const n = Number(withdrawAmount);
-  const address = withdrawAddress.trim();
-
-  const minimumAmount =
-    withdrawCurrency === 'USDT' ? 1 : 0.00000001;
-
-  if (!address || !Number.isFinite(n) || n <= 0) {
-    return setToast('Enter a destination address and valid amount.');
-  }
-
-  if (n < minimumAmount) {
-    return setToast(`Minimum withdrawal is ${minimumAmount} ${withdrawCurrency}.`);
-  }
-
-  if (n > withdrawAvailableBalance) {
-    return setToast(`Insufficient ${withdrawCurrency} balance.`);
-  }
+  const address = String(withdrawAddress || '').trim();
 
   if (!supabase) {
     return setToast('Supabase is not configured.');
   }
 
-  const {
-    data: { user },
-    error: authError
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return setToast('Please sign in before submitting a withdrawal request.');
+  if (!address || !Number.isFinite(n) || n <= 0) {
+    return setToast('Enter a destination address and valid amount.');
   }
 
-  const { data, error } = await supabase
-    .from('withdrawal_requests')
-    .insert({
-      user_id: user.id,
-      amount: n,
-      currency: withdrawCurrency,
-      method: withdrawMethod,
-      wallet_address: address,
-      status: 'Pending'
-    })
-    .select()
-    .single();
+  if (n > withdrawAvailableBalance) {
+    return setToast(`Insufficient ${withdrawCurrency} Funding balance.`);
+  }
 
-  if (error) {
+  try {
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return setToast('Please sign in first.');
+    }
+
+    // Server-side RPC: deducts Funding balance and creates
+    // the pending withdrawal + Debit transaction atomically.
+    const { data, error } = await supabase.rpc(
+      'submit_funding_withdrawal',
+      {
+        p_amount: n,
+        p_currency: withdrawCurrency,
+        p_method: withdrawMethod,
+        p_wallet_address: address
+      }
+    );
+
+    if (error) throw error;
+
+    if (!data?.success || !data?.id) {
+      throw new Error('Withdrawal was not confirmed.');
+    }
+
+    // Update the visible balance after Supabase confirms success.
+    if (withdrawCurrency === 'USDT') {
+      setBalance(Number(data.balance));
+    } else {
+      setCoinWallets(current => ({
+        ...current,
+        Funding: {
+          ...current.Funding,
+          [withdrawCurrency]: Number(data.balance)
+        }
+      }));
+    }
+
+    setRequests(current => [
+      {
+        id: data.id,
+        type: 'Withdraw',
+        method: data.method,
+        currency: data.currency,
+        amount: Number(data.amount),
+        address: data.wallet_address,
+        status: data.status,
+        created: data.created_at
+      },
+      ...current
+    ]);
+
+    setToast('Withdrawal request submitted');
+    setWithdrawAddress('');
+    setWithdrawAmount('');
+
+  } catch (error) {
     console.error('Withdrawal submission failed:', error);
-    return setToast(`Withdrawal failed: ${error.message}`);
+
+    const message = String(error?.message || '');
+
+    if (message.toLowerCase().includes('insufficient')) {
+      setToast(`Insufficient ${withdrawCurrency} Funding balance.`);
+    } else {
+  setToast(message || 'Unknown withdrawal error');
+}
   }
-
-  setRequests(r => [
-    {
-      id: data.id,
-      type: 'Withdraw',
-      method: data.method,
-      currency: data.currency,
-      amount: Number(data.amount),
-      address: data.wallet_address,
-      status: data.status,
-      created: data.created_at
-    },
-    ...r
-  ]);
-
-  setToast('Withdrawal request submitted');
-  setWithdrawAddress('');
-  setWithdrawAmount('');
 };
 
+
+const sendAdminNotification = async (email, title, message) => {
+  if (!supabase || !isAdmin) {
+    setToast('Admin access required.');
+    return;
+  }
+
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const cleanTitle = String(title || '').trim();
+  const cleanMessage = String(message || '').trim();
+
+  if (!cleanEmail || !cleanTitle || !cleanMessage) {
+    setToast('Please fill in all notification fields.');
+    return;
+  }
+
+  const { data: profile, error: findError } = await supabase
+    .from('profiles')
+    .select('id')
+    .ilike('email', cleanEmail)
+    .maybeSingle();
+
+  if (findError || !profile) {
+    setToast('User not found. Check the email address.');
+    return;
+  }
+
+  const { error } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: profile.id,
+      title: cleanTitle,
+      message: cleanMessage,
+      type: 'admin_notice'
+    });
+
+  if (error) {
+    console.error('Admin notification error:', error);
+    setToast('Notification could not be sent.');
+    return;
+  }
+
+  setToast('Notification sent successfully!');
+};
 
   const approveRequest = async (id, status, adminNote = '') => {
   const request = requests.find(r => r.id === id);
@@ -5323,6 +5607,13 @@ const submitWithdraw = async (e) => {
   }
 
   try {
+    console.log('REJECT DEBUG:', {
+  id,
+  status,
+  adminNote,
+  requestType,
+  request
+});
     const { data, error } = await supabase.rpc(
       'admin_review_funding_request',
       {
@@ -5334,10 +5625,32 @@ const submitWithdraw = async (e) => {
     );
 
     if (error) throw error;
+    console.log('REJECT RPC RESULT:', { data, error });
     if (!data?.success) {
       throw new Error('Request review was not confirmed.');
     }
+const notificationUserId = request.userId;
 
+if (notificationUserId) {
+  const { error: noticeError } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: notificationUserId,
+
+      title: `${requestType} ${status}`,
+
+      
+message: status === 'Approved'
+  ? `Your ${requestType.toLowerCase()} request has been approved successfully.`
+  : `Your ${requestType.toLowerCase()} request was rejected.${String(adminNote || '').trim() ? ` Reason: ${String(adminNote).trim()}` : ''}`,
+
+      type: requestType.toLowerCase()
+    });
+
+  if (noticeError) {
+    console.error('Funding notification error:', noticeError);
+  }
+}
     setRequests(current =>
       current.map(r =>
         r.id === id
@@ -5441,7 +5754,21 @@ const supportedDepositCoins = [
   { symbol: 'RLUSD', name: 'Ripple USD', logo: 'rlusd', fallback: '$' },
   { symbol: 'XAUT', name: 'Tether Gold', logo: 'xaut', fallback: 'Au' }
 ];
+const withdrawCoinInfo = supportedDepositCoins.find(
+  coin => coin.symbol === withdrawCoin
+);
 
+const withdrawNetworks = depositAssets.filter(
+  item =>
+    item.currency?.toUpperCase() === withdrawCoin &&
+    item.network
+);
+
+const filteredWithdrawCoins = supportedDepositCoins.filter(coin =>
+  `${coin.name} ${coin.symbol}`.toLowerCase().includes(
+    withdrawSearch.toLowerCase()
+  )
+);
 const depositCurrencies = supportedDepositCoins.filter(coin =>
   depositAssets.some(
     item => item.currency?.toUpperCase() === coin.symbol
@@ -5465,7 +5792,7 @@ walletAddresses={walletAddresses}
 setWalletAddresses={setWalletAddresses}
 walletQrCodes={walletQrCodes}
 saveWalletSettings={saveWalletSettings}
-setToast={setToast} telegramUrl={telegramUrl} setTelegramUrl={setTelegramUrl} />{toast && <div className="toast">{toast}<button onClick={() => setToast('')}>×</button></div>}</main></div>
+setToast={setToast} telegramUrl={telegramUrl} sendAdminNotification={sendAdminNotification} setTelegramUrl={setTelegramUrl} />{toast && <div className="toast">{toast}<button onClick={() => setToast('')}>×</button></div>}</main></div>
   }
 // Require authentication before accessing the website
 if (!adminProfileLoaded) {
@@ -5643,6 +5970,146 @@ if (!authSession && !isAdminRoute) {
    <header className="topbar">
   <Logo />
   <div className="topbar-right">
+  <div style={{ position: 'relative' }}>
+
+  <button
+    onClick={() => setNotificationOpen(!notificationOpen)}
+    style={{
+      position: 'relative',
+      background: '#20242d',
+      color: '#fff',
+      border: '1px solid #414754',
+      borderRadius: '10px',
+      padding: '10px 14px',
+      cursor: 'pointer',
+      fontSize: '20px'
+    }}
+  >
+    🔔
+
+    {unreadNotifications > 0 && (
+      <span style={{
+        position: 'absolute',
+        top: '-7px',
+        right: '-7px',
+        background: '#e53935',
+        color: '#fff',
+        borderRadius: '50%',
+        minWidth: '19px',
+        height: '19px',
+        fontSize: '11px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2px'
+      }}>
+        {unreadNotifications}
+      </span>
+    )}
+  </button>
+
+  {notificationOpen && (
+    <div style={{
+      position: 'absolute',
+      right: 0,
+      top: '48px',
+      width: '320px',
+      maxWidth: '85vw',
+      maxHeight: '420px',
+      overflowY: 'auto',
+      background: '#171b24',
+      color: '#fff',
+      border: '1px solid #343b49',
+      borderRadius: '12px',
+      padding: '14px',
+      zIndex: 9999,
+      boxShadow: '0 10px 35px rgba(0,0,0,.4)'
+    }}>
+
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '12px'
+      }}>
+        <strong>Notifications</strong>
+
+        <button
+          onClick={markAllNotificationsRead}
+          style={{
+            background: 'none',
+            color: '#d8ad55',
+            border: 0,
+            cursor: 'pointer'
+          }}
+        >
+          Read all
+        </button>
+      </div>
+
+      {notifications.length === 0 ? (
+        <p style={{ color: '#999', textAlign: 'center' }}>
+          No notifications yet.
+        </p>
+      ) : (
+        notifications.map(n => (
+          <div
+            key={n.id}
+           onClick={() => {
+  setSelectedNotification(n);
+  if (!n.is_read) {
+    markNotificationRead(n.id);
+  }
+}}
+            style={{
+              padding: '12px',
+              marginBottom: '8px',
+              borderRadius: '9px',
+              background: n.is_read ? '#202630' : '#303747',
+              borderLeft: n.is_read
+                ? '3px solid #555'
+                : '3px solid #d8ad55',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '8px'
+            }}>
+              <strong style={{ fontSize: '13px' }}>
+                {n.title}
+              </strong>
+
+              {!n.is_read && (
+                <span style={{
+                  color: '#d8ad55',
+                  fontSize: '10px'
+                }}>
+                  NEW
+                </span>
+              )}
+            </div>
+
+            <p style={{
+              fontSize: '12px',
+              color: '#c5c9d1',
+              margin: '7px 0'
+            }}>
+              {n.message}
+            </p>
+
+            <small style={{ color: '#89909d' }}>
+              {new Date(n.created_at).toLocaleString()}
+            </small>
+          </div>
+        ))
+      )}
+
+    </div>
+  )}
+
+</div>
     <label className="language-picker-label" aria-label="Select language">
       <span>🌐</span>
       <select
@@ -5751,6 +6218,166 @@ if (!authSession && !isAdminRoute) {
 <div className="side-spacer" />
 </aside>
 
+{selectedNotification && (
+  <div
+    onClick={() => setSelectedNotification(null)}
+    style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.75)',
+      zIndex: 99999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: '100%',
+        maxWidth: 450,
+        background: '#151b2b',
+        color: '#fff',
+        border: '1px solid #30394d',
+        borderRadius: 16,
+        padding: 22,
+        boxShadow: '0 15px 50px rgba(0,0,0,0.5)'
+      }}
+    >
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 18
+      }}>
+        <h3 style={{ margin: 0 }}>Notification Details</h3>
+
+        <button
+          type="button"
+          onClick={() => setSelectedNotification(null)}
+          style={{
+            background: 'transparent',
+            color: '#fff',
+            border: 'none',
+            fontSize: 24,
+            cursor: 'pointer'
+          }}
+        >
+          ×
+        </button>
+      </div>
+{(() => {
+  const style = getNotificationStyle(selectedNotification);
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      marginBottom: 18
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10
+      }}>
+        <span style={{
+          width: 44,
+          height: 44,
+          borderRadius: 13,
+          background: `${style.color}20`,
+          display: 'grid',
+          placeItems: 'center',
+          fontSize: 23
+        }}>
+          {style.icon}
+        </span>
+
+        <div>
+          <strong style={{ color: style.color }}>
+            {style.label}
+          </strong>
+          <div style={{ fontSize: 11, color: '#9ca3af' }}>
+            IGTrade Notification
+          </div>
+        </div>
+      </div>
+
+      {style.status && (
+        <span style={{
+          padding: '6px 11px',
+          borderRadius: 20,
+          fontSize: 11,
+          fontWeight: 700,
+          color: style.status === 'Approved'
+            ? '#34d399'
+            : style.status === 'Rejected'
+              ? '#f87171'
+              : '#fbbf24',
+          background: style.status === 'Approved'
+            ? 'rgba(52,211,153,0.12)'
+            : style.status === 'Rejected'
+              ? 'rgba(248,113,113,0.12)'
+              : 'rgba(251,191,36,0.12)'
+        }}>
+          {style.status.toUpperCase()}
+        </span>
+      )}
+    </div>
+  );
+})()}
+
+    <h2 style={{
+  fontSize: 21,
+  fontWeight: 750,
+  margin: '0 0 14px',
+  color: '#ffffff',
+  lineHeight: 1.4
+}}>
+  {selectedNotification.title}
+</h2>
+
+      <p style={{
+  whiteSpace: 'pre-wrap',
+  overflowWrap: 'anywhere',
+  lineHeight: 1.8,
+  color: '#d1d5db',
+  fontSize: 14,
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 12,
+  padding: 15
+}}>
+  {selectedNotification.message}
+</p>
+
+      <small style={{ color: '#9ca3af' }}>
+        {new Date(selectedNotification.created_at).toLocaleString()}
+      </small>
+
+      <button
+        type="button"
+        onClick={() => setSelectedNotification(null)}
+        style={{
+          display: 'block',
+          width: '100%',
+          marginTop: 22,
+          padding: 12,
+          borderRadius: 9,
+          border: 'none',
+          background: '#2878ef',
+          color: '#fff',
+          cursor: 'pointer'
+        }}
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
+
       <main className="main-content">
   <WithdrawalTicker />
 
@@ -5836,7 +6463,7 @@ if (!authSession && !isAdminRoute) {
 
 
 {/* CoinMarketCap-style Crypto Ranking Table */}
-{(marketFilter === 'All' || marketFilter === 'Crypto') && (
+{(
   <div className="crypto-ranking-wrap">
     <div className="crypto-ranking-title">
       <h2>Cryptocurrency Rankings</h2>
@@ -5861,7 +6488,129 @@ if (!authSession && !isAdminRoute) {
         </thead>
 
         <tbody>
-          {paginatedCryptoRanking.map((coin, index) => {
+                    {/* Gold XAU/USD - Always First */}
+          {(() => {
+            const gold = livePrices.XAU || {};
+            const goldPrice = Number(gold.price);
+            const candles = liveCandles.XAU || [];
+const firstCandle = candles[0];
+const lastCandle = candles[candles.length - 1];
+
+const goldSevenDay =
+  firstCandle?.open && lastCandle?.close
+    ? ((lastCandle.close - firstCandle.open) / firstCandle.open) * 100
+    : null;
+
+const goldOneHour = getGoldChange(candles, 1);
+const goldTwentyFourHour = getGoldChange(candles, 24);
+const goldVolume = getGold24hVolume(candles);
+
+const goldPoints = candles
+
+              .filter(c => Number.isFinite(Number(c.close)))
+              .map((c, i, arr) => {
+                const values = arr.map(x => Number(x.close));
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const range = max - min || 1;
+                const x = (i / Math.max(arr.length - 1, 1)) * 100;
+                const y = 30 - ((Number(c.close) - min) / range) * 27;
+                return `${x},${y}`;
+              })
+              .join(' ');
+
+            return (
+              <tr className="gold-ranking-row" onClick={() => {
+                setSelected('XAU');
+                setPage('Trade');
+              }}>
+                
+<td>1</td>
+
+<td>
+  <div className="ranking-coin-name">
+    <span className="gold-coin-icon">Au</span>
+    <strong>Gold</strong>
+    <button
+      className="gold-buy-btn"
+      onClick={e => {
+        e.stopPropagation();
+        setDepositMode('home');
+        setPage('Deposit');
+      }}
+    >
+      BUY
+    </button>
+    <span>XAU/USD</span>
+  </div>
+</td>
+
+<td>
+  {Number.isFinite(goldPrice)
+    ? '$' + goldPrice.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
+    : '—'}
+</td>
+
+<td>
+  {goldVolume == null
+    ? '—'
+    : Number(goldVolume).toLocaleString('en-US', {
+        maximumFractionDigits: 2
+      })}
+</td>
+
+<td className={goldOneHour == null ? '' : goldOneHour >= 0 ? 'positive' : 'negative'}>
+  {goldOneHour == null ? '—' : `${goldOneHour >= 0 ? '+' : ''}${goldOneHour.toFixed(2)}%`}
+</td>
+
+<td className={goldTwentyFourHour == null ? '' : goldTwentyFourHour >= 0 ? 'positive' : 'negative'}>
+  {goldTwentyFourHour == null ? '—' : `${goldTwentyFourHour >= 0 ? '+' : ''}${goldTwentyFourHour.toFixed(2)}%`}
+</td>
+
+<td className={goldSevenDay == null ? '' : goldSevenDay >= 0 ? 'positive' : 'negative'}>
+  {goldSevenDay == null ? '—' : `${goldSevenDay >= 0 ? '+' : ''}${goldSevenDay.toFixed(2)}%`}
+</td>
+
+<td>
+  <div className="gold-sparkline">
+    {goldPoints ? (
+      <svg className="ranking-sparkline" viewBox="0 0 100 32" preserveAspectRatio="none">
+        <polyline
+          points={goldPoints}
+          fill="none"
+          stroke={goldSevenDay == null || goldSevenDay >= 0 ? '#16c784' : '#ea3943'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ) : '—'}
+  </div>
+</td>
+
+<td>
+  {Number(gold.marketCap) > 0
+    ? '$' + Number(gold.marketCap).toLocaleString('en-US', {
+        maximumFractionDigits: 0
+      })
+    : '—'}
+</td>
+
+<td>
+  {Number(gold.supplyTonnes) > 0
+    ? Number(gold.supplyTonnes).toLocaleString('en-US', {
+        maximumFractionDigits: 2
+      }) + ' tonnes'
+    : '—'}
+</td>
+
+              </tr>
+            );
+          })()}
+          {(marketFilter === 'All' || marketFilter === 'Crypto') && paginatedCryptoRanking.map((coin, index) => {
               const money = value =>
                 value == null
                   ? '—'
@@ -5980,7 +6729,8 @@ if (!authSession && !isAdminRoute) {
         </div>
       )}
     </div>
-   <div className="crypto-pagination">
+    {(marketFilter === 'All' || marketFilter === 'Crypto') && (
+  <div className="crypto-pagination">
   <button
     type="button"
     disabled={safeCryptoPage === 1}
@@ -6025,14 +6775,15 @@ if (!authSession && !isAdminRoute) {
   >
     Next
   </button>
-</div>
+    </div>
+  )}
   </div>
 )}
 
 {/* Existing non-crypto market cards */}
 <div className="market-grid">
   {filterMarkets
-    .filter(m => m.kind !== 'Crypto')
+    .filter(m => m.kind !== 'Crypto' && m.symbol !== 'XAU')
     .map(m => (
       <button
         key={m.symbol}
@@ -6234,7 +6985,7 @@ if (!authSession && !isAdminRoute) {
   })()}
 </div>
  </div><div className="panel quick-panel"><span className="eyebrow">QUICK ACTION</span><h2>Ready to trade?</h2><p className="muted">Start a trade with account funds.</p><button className="btn btn-gold btn-full" onClick={() => setPage('Trade')}>Open trading terminal <span>↗</span></button><button className="btn btn-outline btn-full" onClick={() => setPage('Deposit')}>Deposit request <span>＋</span></button><div className="secure-note"><span>✦</span> Account balance.</div></div></div>
-          <CustomerService telegramUrl={telegramUrl} />
+          <CustomerService telegramUrl={telegramUrl} sendAdminNotification={sendAdminNotification} />
         </section>}
         {page === 'Trade' && <section className={`page-section ${tradeFullscreen ? 'trade-fullscreen' : ''}`}>
 
@@ -6496,15 +7247,13 @@ onTimeframeChange={setChartTimeframe}
       <span className="field-label">Selected Coin</span>
 
       <button
-        type="button"
-        className="btn btn-outline"
-        onClick={() => {
-          setBuyCryptoStep('select');
-          setBuyCryptoSearch('');
-        }}
-      >
-        ← Change Coin
-      </button>
+  type="button"
+  className="withdraw-back-btn"
+  onClick={() => setWithdrawStep('coin')}
+>
+  <span style={{color: '#171717'}}>←</span>
+  <span style={{color: '#171717'}}>Change Coin</span>
+</button>
     </div>
 
     {supportedDepositCoins
@@ -8551,104 +9300,194 @@ style={{ touchAction: 'pan-y', cursor: 'crosshair' }}
   </section>
 )}
 
-        {page === 'Withdraw' && (
-          <section className="page-section narrow-page">
-            <div className="eyebrow">WALLET SERVICES</div>
-            <h1>Withdraw <span className="gold-text">request</span></h1>
-            <p className="muted">Please ensure that your address is entered correctly before submitting.</p>
+        
+{page === 'Withdraw' && (
+  <section className="page-section narrow-page">
+    <div className="eyebrow">WALLET SERVICES</div>
+    <h1>Withdraw <span className="gold-text">request</span></h1>
+    <p className="muted">
+      Select your coin and withdrawal network.
+    </p>
 
-            <div className="panel form-panel">
-              <form
-                onSubmit={(e) => {
-                  submitWithdraw(e);
+    <div className="panel form-panel">
+
+      {withdrawStep === 'coin' && (
+        <>
+          <label className="field-label">Search Coin</label>
+          <input
+            className="text-input"
+            value={withdrawSearch}
+            onChange={e => setWithdrawSearch(e.target.value)}
+            placeholder="Search coin name or symbol..."
+          />
+
+          <div className="withdraw-coin-list">
+            {filteredWithdrawCoins.map(coin => (
+              <button
+                type="button"
+                key={coin.symbol}
+                className="withdraw-coin-option"
+                onClick={() => {
+                  setWithdrawCoin(coin.symbol);
+                  setWithdrawMethod('');
+                  setWithdrawAddress('');
+                  setWithdrawStep('network');
                 }}
               >
-                
-<div className="available-balance">
-  <span>Available balance</span>
-  <strong>
-    {withdrawMethod === 'TRC20'
-      ? money(balance)
-      : Number(coinWallets.Funding?.[withdrawMethod] || 0).toLocaleString('en-US', {
-          maximumFractionDigits: 8
-        })}
-    <small> {withdrawMethod === 'TRC20' ? 'USDT' : withdrawMethod}</small>
-  </strong>
-</div>
+                <span className="withdraw-coin-icon">
+                  <img
+                    src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${coin.logo}.png`}
+                    alt={coin.symbol}
+                    onError={e => {
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextElementSibling.style.display = 'grid';
+                    }}
+                  />
+                  <span style={{display: 'none'}}>
+                    {coin.fallback}
+                  </span>
+                </span>
 
+                <span>
+                  <strong>{coin.name}</strong>
+                  <small>{coin.symbol}</small>
+                </span>
 
-                <label className="field-label">Select network</label>
-                <div className="network-options">
-                  {['TRC20', 'BTC', 'ETH'].map(n => (
-                    <button
-                      type="button"
-                      key={n}
-                      className={withdrawMethod === n ? 'network-active' : ''}
-                      onClick={() => {
-  setWithdrawMethod(n)
-  setWithdrawAddress(walletAddresses[n] || '')
-}}
-                    >
-                      <span className="network-symbol">
-                        {n === 'TRC20' ? '₮' : n === 'BTC' ? '₿' : '◆'}
-                      </span>
-                      <strong>{n}</strong>
-                      <small>
-                        {n === 'TRC20'
-                          ? 'USDT · Tron'
-                          : n === 'BTC'
-                            ? 'Bitcoin'
-                            : 'Ethereum'}
-                      </small>
-                    </button>
-                  ))}
-                </div>
+                <span className="withdraw-coin-arrow">›</span>
+              </button>
+            ))}
+          </div>
 
-                <label className="field-label" htmlFor="withdraw-address">
-                  Destination wallet address
-                </label>
-                <input
-  className="text-input"
-  id="withdraw-address"
-  value={withdrawAddress}
-  onChange={e => setWithdrawAddress(e.target.value)}
-  placeholder={
-    walletAddresses[withdrawMethod]
-      ? 'Saved address loaded'
-      : 'No saved address. Add one in My Profile'
-  }
-  required
-/>
+          {filteredWithdrawCoins.length === 0 && (
+            <p className="muted">No coins found.</p>
+          )}
+        </>
+      )}
 
-               
-<label className="field-label" htmlFor="withdraw-amount">
-  Amount ({withdrawCurrency}) · Available:{' '}
-  {withdrawAvailableBalance.toLocaleString('en-US', {
-    maximumFractionDigits: 8
-  })} {withdrawCurrency}
-</label>
+      {withdrawStep === 'network' && (
+        <>
+          <button
+            type="button"
+            className="field-label"
+            onClick={() => setWithdrawStep('coin')}
+          >
+            ← Change Coin
+          </button>
 
-<div className="amount-input">
-  <span>
-    {withdrawCurrency === 'USDT'
-      ? '$'
-      : withdrawCurrency === 'BTC'
-        ? '₿'
-        : 'Ξ'}
-  </span>
-
-  <input
-    id="withdraw-amount"
-    type="number"
-    min={withdrawCurrency === 'USDT' ? '1' : '0.00000001'}
-    max={withdrawAvailableBalance}
-    step="any"
-    value={withdrawAmount}
-    onChange={e => setWithdrawAmount(e.target.value)}
-    placeholder="0.00"
-    required
+          <div className="withdraw-selected-coin">
+  <img
+    src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${withdrawCoinInfo?.logo || withdrawCoin.toLowerCase()}.png`}
+    alt={withdrawCoin}
   />
+  <div>
+    <strong>{withdrawCoinInfo?.name || withdrawCoin}</strong>
+    <small>{withdrawCoin}</small>
+  </div>
 </div>
+
+          <label className="field-label">Select Network</label>
+
+          <div className="network-options">
+            {withdrawNetworks.map(item => (
+              <button
+                type="button"
+                key={`${item.currency}-${item.network}`}
+                className={
+                  withdrawMethod === item.network
+                    ? 'network-active'
+                    : ''
+                }
+                onClick={() => {
+                  setWithdrawMethod(item.network);
+                  setWithdrawAddress(
+                    walletAddresses[item.network] || ''
+                  );
+                }}
+              >
+               <span className="network-symbol">
+  <img
+    src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${
+      /TRC|TRON/i.test(item.network) ? 'trx' :
+      /ERC|ETH/i.test(item.network) ? 'eth' :
+      /BEP|BNB/i.test(item.network) ? 'bnb' :
+      /BTC|BITCOIN/i.test(item.network) ? 'btc' :
+      /SOL/i.test(item.network) ? 'sol' :
+      /XRP/i.test(item.network) ? 'xrp' :
+      withdrawCoinInfo?.logo || withdrawCoin.toLowerCase()
+    }.png`}
+    alt={item.network}
+    onError={e => {
+      e.currentTarget.style.display = 'none';
+    }}
+  />
+</span>
+                <strong>{item.network}</strong>
+                <small>{withdrawCoin} Network</small>
+              </button>
+            ))}
+          </div>
+
+          {withdrawNetworks.length === 0 && (
+            <p className="muted">
+              No active network is available for this coin.
+            </p>
+          )}
+
+          {withdrawMethod && (
+            <>
+              <div className="available-balance">
+                <span>Available balance</span>
+                <strong>
+                  {withdrawAvailableBalance.toLocaleString('en-US', {
+                    maximumFractionDigits: 8
+                  })}
+                  <small> {withdrawCurrency}</small>
+                </strong>
+              </div>
+
+              <form onSubmit={submitWithdraw}>
+                <label
+                  className="field-label"
+                  htmlFor="withdraw-address"
+                >
+                  Destination Wallet Address
+                </label>
+
+                <input
+                  className="text-input"
+                  id="withdraw-address"
+                  value={withdrawAddress}
+                  onChange={e => setWithdrawAddress(e.target.value)}
+                  placeholder="Enter destination wallet address"
+                  required
+                />
+
+                <label
+                  className="field-label"
+                  htmlFor="withdraw-amount"
+                >
+                  Amount ({withdrawCurrency})
+                </label>
+
+                <div className="amount-input">
+                 <span className="withdraw-amount-logo">
+  <img
+    src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${withdrawCoinInfo?.logo || withdrawCoin.toLowerCase()}.png`}
+    alt={withdrawCoin}
+  />
+</span>
+                  <input
+                    id="withdraw-amount"
+                    type="number"
+                    min="0.00000001"
+                    max={withdrawAvailableBalance}
+                    step="any"
+                    value={withdrawAmount}
+                    onChange={e => setWithdrawAmount(e.target.value)}
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
 
                 <button
                   className="btn btn-gold btn-full btn-large"
@@ -8657,18 +9496,21 @@ style={{ touchAction: 'pan-y', cursor: 'crosshair' }}
                   Submit withdrawal request ↗
                 </button>
               </form>
-            </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
 
-            <div className="notice deposit-compact-notice">
-              <strong>IG</strong>
-              <p>
-                Please ensure that your address is entered
-              </p>
-            </div>
-          </section>
-        )}
-
-       
+    <div className="notice deposit-compact-notice">
+      <strong>IG</strong>
+      <p>
+        Please ensure that your destination wallet address
+        and selected network are correct.
+      </p>
+    </div>
+  </section>
+)}
 {page === 'Assets' && (
   <section className="page-section assets-page">
     <div className="eyebrow">WALLET OVERVIEW</div>
@@ -9104,60 +9946,166 @@ setTransferAmount(String(available));
 </div>
 )}
 
-</div>
+</div>  
 <div className="stat-grid">
-  <div className="panel stat-card">
+<div className="panel stat-card">
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <img
+      src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdt.png"
+      alt="USDT"
+      width="28"
+      height="28"
+      onError={e => e.currentTarget.style.display = 'none'}
+    />
     <small>USDT Balance</small>
-    <strong>{money(balance)}</strong>
-    <span className="muted">USDT funds</span>
   </div>
-
-  <div className="panel stat-card">
-    <small>BTC Balance</small>
-    <strong>{btcBalance.toFixed(8)} BTC</strong>
-    <span className="muted">
-      {livePrices.BTC?.price
-        ? money(btcBalance * livePrices.BTC.price)
-        : 'Market price loading'}
-    </span>
-  </div>
-
-  <div className="panel stat-card">
-    <small>ETH Balance</small>
-    <strong>{ethBalance.toFixed(8)} ETH</strong>
-    <span className="muted">
-      {livePrices.ETH?.price
-        ? money(ethBalance * livePrices.ETH.price)
-        : 'Market price loading'}
-    </span>
-  </div>
-
-  <div className="panel stat-card">
-    <small>Trades</small>
-    <strong>{tradeHistory.length}</strong>
-    <span className="muted">Completed trades</span>
-  </div>
-
-  <div className="panel stat-card">
-    <small>Wallet requests</small>
-    <strong>{requests.length}</strong>
-    <span className="muted">Deposit / Withdraw</span>
-  </div>
+  <strong>{money(balance)}</strong>
+  <span className="muted">USDT funds</span>
 </div>
 
-    <div className="panel history-panel">
-      <div className="history-tabs">
-        {['Trade History', 'Deposit History', 'Withdraw History'].map(tab => (
-          <button
-            key={tab}
-            className={profileTab === tab ? 'selected' : ''}
-            onClick={() => setProfileTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+<div className="panel stat-card">
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <img
+      src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/btc.png"
+      alt="BTC"
+      width="28"
+      height="28"
+      onError={e => e.currentTarget.style.display = 'none'}
+    />
+    <small>BTC Balance</small>
+  </div>
+  <strong>{Number(coinWallets?.Funding?.BTC || 0).toFixed(8)} BTC</strong>
+  <span className="muted">
+    {livePrices.BTC?.price
+      ? money(Number(coinWallets?.Funding?.BTC || 0) * livePrices.BTC.price)
+      : 'Market price loading'}
+  </span>
+</div>
 
+<div className="panel stat-card">
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <img
+      src="https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/eth.png"
+      alt="ETH"
+      width="28"
+      height="28"
+      onError={e => e.currentTarget.style.display = 'none'}
+    />
+    <small>ETH Balance</small>
+  </div>
+  <strong>{Number(coinWallets?.Funding?.ETH || 0).toFixed(8)} ETH</strong>
+  <span className="muted">
+    {livePrices.ETH?.price
+      ? money(Number(coinWallets?.Funding?.ETH || 0) * livePrices.ETH.price)
+      : 'Market price loading'}
+  </span>
+</div>
+  
+<div className="panel stat-card">
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '12px'
+  }}>
+    <div style={{
+      width: '38px',
+      height: '38px',
+      borderRadius: '12px',
+      display: 'grid',
+      placeItems: 'center',
+      background: 'linear-gradient(145deg, rgba(212,175,55,0.25), rgba(212,175,55,0.07))',
+      border: '1px solid rgba(212,175,55,0.35)',
+      boxShadow: '0 4px 14px rgba(212,175,55,0.12)'
+    }}>
+      <svg width="23" height="23" viewBox="0 0 24 24" fill="none"
+        stroke="#D4AF37" strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 17l6-6 4 4 6-8" />
+        <path d="M14 7h6v6" />
+        <path d="M4 21h16" />
+      </svg>
+    </div>
+    <small>Trades</small>
+  </div>
+  <strong>{tradeHistory.length}</strong>
+  <span className="muted">Completed trades</span>
+</div>
+
+<div className="panel stat-card">
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '12px'
+  }}>
+    <div style={{
+      width: '38px',
+      height: '38px',
+      borderRadius: '12px',
+      display: 'grid',
+      placeItems: 'center',
+      background: 'linear-gradient(145deg, rgba(212,175,55,0.25), rgba(212,175,55,0.07))',
+      border: '1px solid rgba(212,175,55,0.35)',
+      boxShadow: '0 4px 14px rgba(212,175,55,0.12)'
+    }}>
+      <svg width="23" height="23" viewBox="0 0 24 24" fill="none"
+        stroke="#D4AF37" strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <path d="M7 8h10M7 12h6M7 16h4" />
+        <path d="M16 15l2 2 3-4" />
+      </svg>
+    </div>
+    <small>Wallet requests</small>
+  </div>
+  <strong>{requests.length}</strong>
+  <span className="muted">Deposit / Withdraw</span>
+</div> 
+</div>
+    <div className="panel history-panel">
+      
+<div className="history-tabs">
+  {[
+    {
+      name: 'Trade History',
+      icon: (
+        <svg viewBox="0 0 24 24">
+          <path d="M3 17l6-6 4 4 8-9" />
+          <path d="M15 6h6v6" />
+        </svg>
+      )
+    },
+    {
+      name: 'Deposit History',
+      icon: (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 16V3m-5 5 5-5 5 5" />
+          <path d="M4 15v5h16v-5" />
+        </svg>
+      )
+    },
+    {
+      name: 'Withdraw History',
+      icon: (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3v13m-5-5 5 5 5-5" />
+          <path d="M4 16v4h16v-4" />
+        </svg>
+      )
+    }
+  ].map(tab => (
+    <button
+      type="button"
+      key={tab.name}
+      className={profileTab === tab.name ? 'selected' : ''}
+      onClick={() => setProfileTab(tab.name)}
+    >
+      <span className="history-tab-icon">{tab.icon}</span>
+      <span>{tab.name}</span>
+    </button>
+  ))}
+</div>
       {profileTab === 'Trade History' ? (
         tradeHistory.length ? (
           tradeHistory.map((t, i) => (
@@ -10302,7 +11250,7 @@ setWalletAddresses={setWalletAddresses}
 walletQrCodes={walletQrCodes}
 saveWalletSettings={saveWalletSettings}
 setToast={setToast}
-telegramUrl={telegramUrl}
+telegramUrl={telegramUrl} sendAdminNotification={sendAdminNotification}
 setTelegramUrl={setTelegramUrl}
         />}
 

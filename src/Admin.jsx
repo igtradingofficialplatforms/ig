@@ -27,9 +27,13 @@ export default function AdminPanel({
   telegramUrl,
   setTelegramUrl,
   advancedRequests = [],
-  reviewAdvancedRequest
+  reviewAdvancedRequest,sendAdminNotification
 }) {
   const [activePage, setActivePage] = useState('Overview');
+  const [noticeEmail, setNoticeEmail] = useState('');
+const [noticeTitle, setNoticeTitle] = useState('');
+const [noticeMessage, setNoticeMessage] = useState('');
+const [noticeSending, setNoticeSending] = useState(false);
   const [requestFilter, setRequestFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [rejectionNotes, setRejectionNotes] = useState({});
@@ -313,12 +317,31 @@ const toggleDepositAsset = async (asset) => {
         {r.currency || ''}
       </div>
     </>
+    
   ) : (
     <>
-      {money(r.amount)}
-      <small>Virtual demo value</small>
+      {r.type === 'Withdraw' ? (
+        <>
+          {String(r.currency || '').toUpperCase() === 'USDT' ? (
+            money(r.amount)
+          ) : (
+            <div style={{ fontSize: 20, fontWeight: 700 }}>
+              {Number(r.amount).toLocaleString('en-US', {
+                maximumFractionDigits: 18
+              })} {r.currency || ''}
+            </div>
+          )}
+          <small>Withdrawal amount</small>
+        </>
+      ) : (
+        <>
+          {money(r.amount)}
+          <small>Virtual demo value</small>
+        </>
+      )}
     </>
   )}
+
 </div>
 
       <div className="request-detail">
@@ -1036,6 +1059,54 @@ const toggleDepositAsset = async (asset) => {
             >
               Save support link
             </button>
+<div className="admin-card" style={{ marginTop: 24 }}>
+  <h3>Send User Notification</h3>
+  <p>Send a custom notification to any registered IGTrade user.</p>
+
+  <input
+    type="email"
+    placeholder="User email address"
+    value={noticeEmail}
+    onChange={(e) => setNoticeEmail(e.target.value)}
+  />
+
+  <input
+    type="text"
+    placeholder="Notification title"
+    value={noticeTitle}
+    onChange={(e) => setNoticeTitle(e.target.value)}
+  />
+
+  <textarea
+    placeholder="Write your notification message..."
+    value={noticeMessage}
+    onChange={(e) => setNoticeMessage(e.target.value)}
+    rows={4}
+  />
+
+  <button
+    type="button"
+    disabled={noticeSending}
+    onClick={async () => {
+      setNoticeSending(true);
+      try {
+        await sendAdminNotification(
+          noticeEmail,
+          noticeTitle,
+          noticeMessage
+        );
+        setNoticeEmail('');
+        setNoticeTitle('');
+        setNoticeMessage('');
+      } finally {
+        setNoticeSending(false);
+      }
+    }}
+  >
+    {noticeSending ? 'Sending...' : 'Send Notification'}
+  </button>
+</div>
+
           </section>
         )}
 
